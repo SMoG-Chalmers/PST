@@ -1,0 +1,9 @@
+[general]
+name=PST
+author=KTH School of Architecture, Chalmers Architecture and Spacescape AB (Alexander Ståhle, Lars Marcus, Daniel Koch, Martin Fitger, Anders Karlström, Tobias Nordström, Ann Legeby, Gianna Stavroulaki, Meta Berghauser Pont, Pablo Miranda).
+qgisMinimumVersion=3.0
+description=PST is a plugin application for the desktop software QGIS that combines space syntax with regular accessibility analysis in one tool.
+about=PST is a plugin application for the desktop software QGIS that combines space syntax with regular accessibility analysis in one tool. PST Documentation is available via KTH (https://www.arch.kth.se/forskning/urban-design/software) and Chalmers (https://www.smog.chalmers.se/PST.html).
+version=version 3.1.3
+experimental=False
+category=Vector
