@@ -1,0 +1,298 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\include\pstalgo\analyses\AngularChoice.h" />
+    <ClInclude Include="..\include\pstalgo\analyses\AngularIntegration.h" />
+    <ClInclude Include="..\include\pstalgo\analyses\AttractionDistance.h" />
+    <ClInclude Include="..\include\pstalgo\analyses\AttractionReach.h" />
+    <ClInclude Include="..\include\pstalgo\analyses\Common.h" />
+    <ClInclude Include="..\include\pstalgo\analyses\CreateGraph.h" />
+    <ClInclude Include="..\include\pstalgo\analyses\CreateJunctions.h" />
+    <ClInclude Include="..\include\pstalgo\analyses\CreateSegmentMap.h" />
+    <ClInclude Include="..\include\pstalgo\analyses\NetworkIntegration.h" />
+    <ClInclude Include="..\include\pstalgo\analyses\ODBetweenness.h" />
+    <ClInclude Include="..\include\pstalgo\analyses\Reach.h" />
+    <ClInclude Include="..\include\pstalgo\analyses\SegmentBetweenness.h" />
+    <ClInclude Include="..\include\pstalgo\analyses\SegmentGrouping.h" />
+    <ClInclude Include="..\include\pstalgo\analyses\SegmentGroupIntegration.h" />
+    <ClInclude Include="..\include\pstalgo\BFS.h" />
+    <ClInclude Include="..\include\pstalgo\Debug.h" />
+    <ClInclude Include="..\include\pstalgo\experimental\ArrayView.h" />
+    <ClInclude Include="..\include\pstalgo\experimental\DirectedMultiDistanceGraph.h" />
+    <ClInclude Include="..\include\pstalgo\experimental\FastSegmentBetweenness.h" />
+    <ClInclude Include="..\include\pstalgo\experimental\IntPrioQueue.h" />
+    <ClInclude Include="..\include\pstalgo\experimental\ShortestPathTraversal.h" />
+    <ClInclude Include="..\include\pstalgo\experimental\SparseDirectedGraph.h" />
+    <ClInclude Include="..\include\pstalgo\experimental\StraightLineMinDistance.h" />
+    <ClInclude Include="..\include\pstalgo\geometry\AABSPTree.h" />
+    <ClInclude Include="..\include\pstalgo\geometry\ConvexHull.h" />
+    <ClInclude Include="..\include\pstalgo\geometry\Geometry.h" />
+    <ClInclude Include="..\include\pstalgo\geometry\Polygon.h" />
+    <ClInclude Include="..\include\pstalgo\geometry\Rect.h" />
+    <ClInclude Include="..\include\pstalgo\geometry\RegionPoints.h" />
+    <ClInclude Include="..\include\pstalgo\graph\AxialGraph.h" />
+    <ClInclude Include="..\include\pstalgo\graph\BFSTraversal.h" />
+    <ClInclude Include="..\include\pstalgo\graph\GraphColoring.h" />
+    <ClInclude Include="..\include\pstalgo\graph\SegmentGraph.h" />
+    <ClInclude Include="..\include\pstalgo\graph\SegmentGroupGraph.h" />
+    <ClInclude Include="..\include\pstalgo\graph\SimpleGraph.h" />
+    <ClInclude Include="..\include\pstalgo\Limits.h" />
+    <ClInclude Include="..\include\pstalgo\maths.h" />
+    <ClInclude Include="..\include\pstalgo\pstalgo.h" />
+    <ClInclude Include="..\include\pstalgo\system\System.h" />
+    <ClInclude Include="..\include\pstalgo\test\CallbackTest.h" />
+    <ClInclude Include="..\include\pstalgo\Types.h" />
+    <ClInclude Include="..\include\pstalgo\utils\Bit.h" />
+    <ClInclude Include="..\include\pstalgo\utils\BitVector.h" />
+    <ClInclude Include="..\include\pstalgo\utils\DebugUtils.h" />
+    <ClInclude Include="..\include\pstalgo\utils\DiscretePrioQueue.h" />
+    <ClInclude Include="..\include\pstalgo\utils\Macros.h" />
+    <ClInclude Include="..\include\pstalgo\utils\Perf.h" />
+    <ClInclude Include="..\include\pstalgo\utils\SimpleAlignedAllocator.h" />
+    <ClInclude Include="..\include\pstalgo\Vec2.h" />
+    <ClInclude Include="..\src\analyses\AngularChoiceAlgo.h" />
+    <ClInclude Include="..\src\Platform.h" />
+    <ClInclude Include="..\src\Progress.h" />
+    <ClInclude Include="..\src\ProgressUtil.h" />
+    <ClInclude Include="..\src\utils\SphereTree.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\src\analyses\AngularChoice.cpp" />
+    <ClCompile Include="..\src\analyses\AngularChoiceAlgo.cpp" />
+    <ClCompile Include="..\src\analyses\AngularIntegration.cpp" />
+    <ClCompile Include="..\src\analyses\AttractionDistance.cpp" />
+    <ClCompile Include="..\src\analyses\AttractionReach.cpp" />
+    <ClCompile Include="..\src\analyses\Common.cpp" />
+    <ClCompile Include="..\src\analyses\CreateGraph.cpp" />
+    <ClCompile Include="..\src\analyses\CreateJunctions.cpp" />
+    <ClCompile Include="..\src\analyses\CreateSegmentMap.cpp" />
+    <ClCompile Include="..\src\analyses\NetworkIntegration.cpp" />
+    <ClCompile Include="..\src\analyses\ODBetweenness.cpp" />
+    <ClCompile Include="..\src\analyses\Reach.cpp" />
+    <ClCompile Include="..\src\analyses\SegmentBetweenness.cpp" />
+    <ClCompile Include="..\src\analyses\SegmentGrouping.cpp" />
+    <ClCompile Include="..\src\analyses\SegmentGroupIntegration.cpp" />
+    <ClCompile Include="..\src\BFS.cpp" />
+    <ClCompile Include="..\src\Debug.cpp" />
+    <ClCompile Include="..\src\experimental\DirectedMultiDistanceGraph.cpp" />
+    <ClCompile Include="..\src\experimental\FastSegmentBetweenness.cpp" />
+    <ClCompile Include="..\src\experimental\ShortestPathTraversal.cpp" />
+    <ClCompile Include="..\src\experimental\SparseDirectedGraph.cpp" />
+    <ClCompile Include="..\src\geometry\AABSPTree.cpp" />
+    <ClCompile Include="..\src\geometry\ConvexHull.cpp" />
+    <ClCompile Include="..\src\geometry\Geometry.cpp" />
+    <ClCompile Include="..\src\geometry\Polygon.cpp" />
+    <ClCompile Include="..\src\geometry\RegionPoints.cpp" />
+    <ClCompile Include="..\src\graph\AxialGraph.cpp" />
+    <ClCompile Include="..\src\graph\GraphColoring.cpp" />
+    <ClCompile Include="..\src\graph\SegmentGraph.cpp" />
+    <ClCompile Include="..\src\graph\SegmentGroupGraph.cpp" />
+    <ClCompile Include="..\src\graph\SimpleGraph.cpp" />
+    <ClCompile Include="..\src\Limits.cpp" />
+    <ClCompile Include="..\src\Platform.cpp" />
+    <ClCompile Include="..\src\ProgressUtil.cpp" />
+    <ClCompile Include="..\src\PSTA.cpp" />
+    <ClCompile Include="..\src\system\System.cpp" />
+    <ClCompile Include="..\src\test\CallbackTest.cpp" />
+    <ClCompile Include="..\src\utils\SimpleAlignedAllocator.cpp" />
+    <ClCompile Include="..\src\utils\SphereTree.cpp" />
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{e4de637a-efeb-11e9-bf94-e03f4947909d}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>MyRootNameSpace</RootNamespace>
+    <LatestTargetPlatformVersion>$([Microsoft.Build.Utilities.ToolLocationHelper]::GetLatestSDKTargetPlatformVersion('Windows', '10.0'))</LatestTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>$(LatestTargetPlatformVersion)</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <PlatformToolset>v141</PlatformToolset>
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>MultiByte</CharacterSet>
+    <UseOfMfc>false</UseOfMfc>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <PlatformToolset>v141</PlatformToolset>
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+    <UseOfMfc>false</UseOfMfc>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <PlatformToolset>v141</PlatformToolset>
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>MultiByte</CharacterSet>
+    <UseOfMfc>false</UseOfMfc>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <PlatformToolset>v141</PlatformToolset>
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+    <UseOfMfc>false</UseOfMfc>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings" />
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
+    <Import Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
+    <Import Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+    <Import Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+    <Import Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <OutDir>$(ProjectDir)..\bin\</OutDir>
+    <IntDir>..\build\$(Platform)\$(Configuration)\</IntDir>
+    <TargetName>$(ProjectName)32d</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <OutDir>$(ProjectDir)..\bin\</OutDir>
+    <IntDir>..\build\$(Platform)\$(Configuration)\</IntDir>
+    <TargetName>$(ProjectName)32</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <OutDir>$(ProjectDir)..\bin\</OutDir>
+    <IntDir>..\build\$(Platform)\$(Configuration)\</IntDir>
+    <TargetName>$(ProjectName)64d</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutDir>$(ProjectDir)..\bin\</OutDir>
+    <IntDir>..\build\$(Platform)\$(Configuration)\</IntDir>
+    <TargetName>$(ProjectName)64</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <WarningLevel>Level3</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <Optimization>Disabled</Optimization>
+      <RuntimeLibrary>MultiThreadedDebugDll</RuntimeLibrary>
+      <PreprocessorDefinitions>PSTADLL_EXPORTS;NOMINMAX;WIN32;_WINDOWS;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <TargetMachine>MachineX86</TargetMachine>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Lib>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+    </Lib>
+    <ResourceCompile>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <Culture>0x0409</Culture>
+      <AdditionalIncludeDirectories>$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <WarningLevel>Level3</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <RuntimeLibrary>MultiThreadedDll</RuntimeLibrary>
+      <PreprocessorDefinitions>PSTADLL_EXPORTS;NOMINMAX;WIN32;_WINDOWS;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <TargetMachine>MachineX86</TargetMachine>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+    <Lib>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+    </Lib>
+    <ResourceCompile>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <Culture>0x0409</Culture>
+      <AdditionalIncludeDirectories>$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <WarningLevel>Level3</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <Optimization>Disabled</Optimization>
+      <RuntimeLibrary>MultiThreadedDebugDll</RuntimeLibrary>
+      <PreprocessorDefinitions>PSTADLL_EXPORTS;NOMINMAX;WIN32;_WIN64;_WINDOWS;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Lib>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+    </Lib>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <ResourceCompile>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <Culture>0x0409</Culture>
+      <AdditionalIncludeDirectories>$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <WarningLevel>Level3</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <RuntimeLibrary>MultiThreadedDll</RuntimeLibrary>
+      <PreprocessorDefinitions>PSTADLL_EXPORTS;NOMINMAX;WIN32;_WIN64;_WINDOWS;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Lib>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+    </Lib>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+    <ResourceCompile>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <Culture>0x0409</Culture>
+      <AdditionalIncludeDirectories>$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

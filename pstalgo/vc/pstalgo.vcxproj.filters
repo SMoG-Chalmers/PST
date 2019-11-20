@@ -1,0 +1,339 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="include">
+      <UniqueIdentifier>{e4df9b92-efeb-11e9-b975-e03f4947909d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\pstalgo">
+      <UniqueIdentifier>{e4df9b93-efeb-11e9-b9a8-e03f4947909d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\pstalgo\analyses">
+      <UniqueIdentifier>{e4df9b94-efeb-11e9-9ceb-e03f4947909d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\pstalgo\experimental">
+      <UniqueIdentifier>{e4df9b95-efeb-11e9-83e7-e03f4947909d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\pstalgo\geometry">
+      <UniqueIdentifier>{e4df9b96-efeb-11e9-a68b-e03f4947909d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\pstalgo\graph">
+      <UniqueIdentifier>{e4df9b97-efeb-11e9-92a0-e03f4947909d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\pstalgo\system">
+      <UniqueIdentifier>{e4df9b98-efeb-11e9-b3db-e03f4947909d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\pstalgo\test">
+      <UniqueIdentifier>{e4df9b99-efeb-11e9-8a1a-e03f4947909d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\pstalgo\utils">
+      <UniqueIdentifier>{e4df9b9a-efeb-11e9-8808-e03f4947909d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src">
+      <UniqueIdentifier>{e4df9b9b-efeb-11e9-b886-e03f4947909d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\analyses">
+      <UniqueIdentifier>{e4df9b9c-efeb-11e9-9431-e03f4947909d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\experimental">
+      <UniqueIdentifier>{e4df9b9d-efeb-11e9-beef-e03f4947909d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\geometry">
+      <UniqueIdentifier>{e4df9b9e-efeb-11e9-92c8-e03f4947909d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\graph">
+      <UniqueIdentifier>{e4df9b9f-efeb-11e9-ab5c-e03f4947909d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\system">
+      <UniqueIdentifier>{e4df9ba0-efeb-11e9-a717-e03f4947909d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\test">
+      <UniqueIdentifier>{e4df9ba1-efeb-11e9-8938-e03f4947909d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\utils">
+      <UniqueIdentifier>{e4df9ba2-efeb-11e9-82b4-e03f4947909d}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\include\pstalgo\analyses\AngularChoice.h">
+      <Filter>include\pstalgo\analyses</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\analyses\AngularIntegration.h">
+      <Filter>include\pstalgo\analyses</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\analyses\AttractionDistance.h">
+      <Filter>include\pstalgo\analyses</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\analyses\AttractionReach.h">
+      <Filter>include\pstalgo\analyses</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\analyses\Common.h">
+      <Filter>include\pstalgo\analyses</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\analyses\CreateGraph.h">
+      <Filter>include\pstalgo\analyses</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\analyses\CreateJunctions.h">
+      <Filter>include\pstalgo\analyses</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\analyses\CreateSegmentMap.h">
+      <Filter>include\pstalgo\analyses</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\analyses\NetworkIntegration.h">
+      <Filter>include\pstalgo\analyses</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\analyses\ODBetweenness.h">
+      <Filter>include\pstalgo\analyses</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\analyses\Reach.h">
+      <Filter>include\pstalgo\analyses</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\analyses\SegmentBetweenness.h">
+      <Filter>include\pstalgo\analyses</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\analyses\SegmentGrouping.h">
+      <Filter>include\pstalgo\analyses</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\analyses\SegmentGroupIntegration.h">
+      <Filter>include\pstalgo\analyses</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\BFS.h">
+      <Filter>include\pstalgo</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\Debug.h">
+      <Filter>include\pstalgo</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\experimental\ArrayView.h">
+      <Filter>include\pstalgo\experimental</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\experimental\DirectedMultiDistanceGraph.h">
+      <Filter>include\pstalgo\experimental</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\experimental\FastSegmentBetweenness.h">
+      <Filter>include\pstalgo\experimental</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\experimental\IntPrioQueue.h">
+      <Filter>include\pstalgo\experimental</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\experimental\ShortestPathTraversal.h">
+      <Filter>include\pstalgo\experimental</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\experimental\SparseDirectedGraph.h">
+      <Filter>include\pstalgo\experimental</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\experimental\StraightLineMinDistance.h">
+      <Filter>include\pstalgo\experimental</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\geometry\AABSPTree.h">
+      <Filter>include\pstalgo\geometry</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\geometry\ConvexHull.h">
+      <Filter>include\pstalgo\geometry</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\geometry\Geometry.h">
+      <Filter>include\pstalgo\geometry</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\geometry\Polygon.h">
+      <Filter>include\pstalgo\geometry</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\geometry\Rect.h">
+      <Filter>include\pstalgo\geometry</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\geometry\RegionPoints.h">
+      <Filter>include\pstalgo\geometry</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\graph\AxialGraph.h">
+      <Filter>include\pstalgo\graph</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\graph\BFSTraversal.h">
+      <Filter>include\pstalgo\graph</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\graph\GraphColoring.h">
+      <Filter>include\pstalgo\graph</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\graph\SegmentGraph.h">
+      <Filter>include\pstalgo\graph</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\graph\SegmentGroupGraph.h">
+      <Filter>include\pstalgo\graph</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\graph\SimpleGraph.h">
+      <Filter>include\pstalgo\graph</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\Limits.h">
+      <Filter>include\pstalgo</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\maths.h">
+      <Filter>include\pstalgo</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\pstalgo.h">
+      <Filter>include\pstalgo</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\system\System.h">
+      <Filter>include\pstalgo\system</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\test\CallbackTest.h">
+      <Filter>include\pstalgo\test</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\Types.h">
+      <Filter>include\pstalgo</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\utils\Bit.h">
+      <Filter>include\pstalgo\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\utils\BitVector.h">
+      <Filter>include\pstalgo\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\utils\DebugUtils.h">
+      <Filter>include\pstalgo\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\utils\DiscretePrioQueue.h">
+      <Filter>include\pstalgo\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\utils\Macros.h">
+      <Filter>include\pstalgo\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\utils\Perf.h">
+      <Filter>include\pstalgo\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\utils\SimpleAlignedAllocator.h">
+      <Filter>include\pstalgo\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\Vec2.h">
+      <Filter>include\pstalgo</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\analyses\AngularChoiceAlgo.h">
+      <Filter>src\analyses</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Platform.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Progress.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\ProgressUtil.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\SphereTree.h">
+      <Filter>src\utils</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\src\analyses\AngularChoice.cpp">
+      <Filter>src\analyses</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\analyses\AngularChoiceAlgo.cpp">
+      <Filter>src\analyses</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\analyses\AngularIntegration.cpp">
+      <Filter>src\analyses</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\analyses\AttractionDistance.cpp">
+      <Filter>src\analyses</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\analyses\AttractionReach.cpp">
+      <Filter>src\analyses</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\analyses\Common.cpp">
+      <Filter>src\analyses</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\analyses\CreateGraph.cpp">
+      <Filter>src\analyses</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\analyses\CreateJunctions.cpp">
+      <Filter>src\analyses</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\analyses\CreateSegmentMap.cpp">
+      <Filter>src\analyses</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\analyses\NetworkIntegration.cpp">
+      <Filter>src\analyses</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\analyses\ODBetweenness.cpp">
+      <Filter>src\analyses</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\analyses\Reach.cpp">
+      <Filter>src\analyses</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\analyses\SegmentBetweenness.cpp">
+      <Filter>src\analyses</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\analyses\SegmentGrouping.cpp">
+      <Filter>src\analyses</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\analyses\SegmentGroupIntegration.cpp">
+      <Filter>src\analyses</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\BFS.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Debug.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\experimental\DirectedMultiDistanceGraph.cpp">
+      <Filter>src\experimental</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\experimental\FastSegmentBetweenness.cpp">
+      <Filter>src\experimental</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\experimental\ShortestPathTraversal.cpp">
+      <Filter>src\experimental</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\experimental\SparseDirectedGraph.cpp">
+      <Filter>src\experimental</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\geometry\AABSPTree.cpp">
+      <Filter>src\geometry</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\geometry\ConvexHull.cpp">
+      <Filter>src\geometry</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\geometry\Geometry.cpp">
+      <Filter>src\geometry</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\geometry\Polygon.cpp">
+      <Filter>src\geometry</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\geometry\RegionPoints.cpp">
+      <Filter>src\geometry</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\graph\AxialGraph.cpp">
+      <Filter>src\graph</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\graph\GraphColoring.cpp">
+      <Filter>src\graph</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\graph\SegmentGraph.cpp">
+      <Filter>src\graph</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\graph\SegmentGroupGraph.cpp">
+      <Filter>src\graph</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\graph\SimpleGraph.cpp">
+      <Filter>src\graph</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Limits.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Platform.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\ProgressUtil.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\PSTA.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\system\System.cpp">
+      <Filter>src\system</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\test\CallbackTest.cpp">
+      <Filter>src\test</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\SimpleAlignedAllocator.cpp">
+      <Filter>src\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\SphereTree.cpp">
+      <Filter>src\utils</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
