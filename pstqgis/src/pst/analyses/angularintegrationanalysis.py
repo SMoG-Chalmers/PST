@@ -101,13 +101,17 @@ class AngularIntegrationAnalysis(BaseAnalysis):
 					out_total_weights = total_weights,
 					out_total_depth_weights = total_depth_weights)
 				if props['norm_normalization']:
-					scores_weighted = total_weights if not props['norm_syntax'] else Vector(ctypes.c_float, line_count, stack_allocator, line_count)
+					scores_weighted = Vector(ctypes.c_float, line_count, stack_allocator, line_count)
 					pstalgo.AngularIntegrationNormalizeLengthWeight(total_weights, total_depth_weights, line_count, scores_weighted)
 					columns.append((ScoreColName(radii, ColName.WEIGHT_LENGTH, ColName.NORM_NONE), 'float', scores_weighted.values()))
 				if props['norm_syntax']:
-					scores_weighted = total_weights
+					scores_weighted = Vector(ctypes.c_float, line_count, stack_allocator, line_count)
 					pstalgo.AngularIntegrationSyntaxNormalizeLengthWeight(total_weights, total_depth_weights, line_count, scores_weighted)
 					columns.append((ScoreColName(radii, ColName.WEIGHT_LENGTH, ColName.NORM_SYNTAX_NAIN), 'float', scores_weighted.values()))
+				if props['norm_hillier']:
+					scores_weighted = Vector(ctypes.c_float, line_count, stack_allocator, line_count)
+					pstalgo.AngularIntegrationHillierNormalizeLengthWeight(total_weights, total_depth_weights, line_count, scores_weighted)
+					columns.append((ScoreColName(radii, ColName.WEIGHT_LENGTH, ColName.NORM_HILLIER), 'float', scores_weighted.values()))
 				if not N_TD_MD_outputted:
 					if props['output_N']:
 						columns.append((ExtraColName(radii, ColName.EXTRA_NODE_COUNT), 'integer', total_counts.values()))
@@ -139,6 +143,10 @@ class AngularIntegrationAnalysis(BaseAnalysis):
 					scores = Vector(ctypes.c_float, line_count, stack_allocator, line_count)
 					pstalgo.AngularIntegrationSyntaxNormalize(total_counts, total_depths, line_count, scores)
 					columns.append((ScoreColName(radii, ColName.WEIGHT_NONE, ColName.NORM_SYNTAX_NAIN), 'float', scores.values()))
+				if props['norm_hillier']:
+					scores = Vector(ctypes.c_float, line_count, stack_allocator, line_count)
+					pstalgo.AngularIntegrationHillierNormalize(total_counts, total_depths, line_count, scores)
+					columns.append((ScoreColName(radii, ColName.WEIGHT_NONE, ColName.NORM_HILLIER), 'float', scores.values()))
 				if not N_TD_MD_outputted:
 					if props['output_N']:
 						columns.append((ExtraColName(radii, ColName.EXTRA_NODE_COUNT), 'integer', total_counts.values()))

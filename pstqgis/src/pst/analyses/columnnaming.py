@@ -63,6 +63,7 @@ class ColName(object):
 	NORM_NONE          = None
 	NORM_SYNTAX_NAIN   = "NAIN"
 	NORM_SYNTAX_NACH   = "NACH"
+	NORM_HILLIER       = "h"
 	NORM_TURNER        = "nT"
 	NORM_STANDARD      = "nS"
 

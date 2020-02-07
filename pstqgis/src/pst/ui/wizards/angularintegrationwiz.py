@@ -52,10 +52,11 @@ class CalcOptionsPage(BasePage):
 		prop_sheet = PropertySheetWidget(self)
 		prop_sheet.newSection("Weight modes")
 		prop_sheet.addBoolProp("No weights",      True, "calc_no_weight")
-		prop_sheet.addBoolProp("Weigh by length", True, "calc_length_weight")
+		prop_sheet.addBoolProp("Weigh by length", False, "calc_length_weight")
 		prop_sheet.newSection("Normalization modes")
-		prop_sheet.addBoolProp("Normalization (Turner 2007)", True, "norm_normalization")
-		prop_sheet.addBoolProp("Syntax normalization (NAIN)", True, "norm_syntax")
+		prop_sheet.addBoolProp("Normalization (Turner 2007)", True,  "norm_normalization")
+		prop_sheet.addBoolProp("Syntax normalization (NAIN)", False, "norm_syntax")
+		prop_sheet.addBoolProp("Normalization (Hillier)",     False, "norm_hillier")
 		prop_sheet.newSection("Angle options")
 		prop_sheet.addNumberProp("Angle precision", 1, 0, "degrees", "angle_precision")
 		prop_sheet.addNumberProp("Angle threshold", 0, 2, "degrees", "angle_threshold")
@@ -68,7 +69,7 @@ class CalcOptionsPage(BasePage):
 		p = self.wizard().prop
 		if not p("calc_no_weight") and not p("calc_length_weight"):
 			QMessageBox.information(self, "Incomplete input", "Please select at least one wight mode.")
-		elif not p("norm_normalization") and not p("norm_syntax"):
+		elif not p("norm_normalization") and not p("norm_syntax") and not p("norm_hillier"):
 			QMessageBox.information(self, "Incomplete input", "Please select at least one normalization mode.")
 		else:
 			return True
