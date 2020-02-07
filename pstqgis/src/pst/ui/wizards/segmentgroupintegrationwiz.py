@@ -19,10 +19,10 @@ You should have received a copy of the GNU General Public License
 along with PST. If not, see <http://www.gnu.org/licenses/>.
 """
 
-from qgis.PyQt.QtWidgets import QComboBox, QLabel, QVBoxLayout
+from qgis.PyQt.QtWidgets import QComboBox, QLabel, QMessageBox, QVBoxLayout
 from ..widgets import PropertySheetWidget, WidgetEnableCheckBox
 from ..wizard import BaseWiz, BasePage, WizProp, WizPropFloat
-from ..pages import FinishPage, NetworkInputPage, ProgressPage, ReadyPage, RadiusPage, RadiusType
+from ..pages import FinishPage, NetworkInputPage, ProgressPage, ReadyPage, RadiusPage, RadiusType, RadiusTypePropName
 
 
 class SegmentGroupIntegrationWiz(BaseWiz):
@@ -30,7 +30,7 @@ class SegmentGroupIntegrationWiz(BaseWiz):
 		BaseWiz.__init__(self, parent, settings, model, "Segment Group Integration")
 		self._task_factory = task_factory
 		self.addPage(InputPage())
-		self.addPage(RadiusPage(radius_types=[RadiusType.WALKING,RadiusType.STEPS]))
+		self.addPage(MyRadiusPage())
 		self.addPage(OutputPage())
 		self.addPage(ReadyPage())
 		self.addPage(ProgressPage())
@@ -91,3 +91,19 @@ class InputPage(BasePage):
 		for name in self.model().tableNames():
 			for combo in combos:
 				combo.addItem(name)
+
+
+class MyRadiusPage(RadiusPage):
+	RADIUS_TYPES = [RadiusType.WALKING, RadiusType.STEPS]
+	
+	def __init__(self):
+		RadiusPage.__init__(self, radius_types=self.RADIUS_TYPES)
+		self.setTitle("Distance type")
+		self.setSubTitle("Please select distance type and radius")
+
+	def validatePage(self):
+		selected_radius_types = [radius_type for radius_type in self.RADIUS_TYPES if self.wizard().prop(RadiusTypePropName(radius_type) + "_enabled")]
+		if not selected_radius_types:
+			QMessageBox.information(self, "Incomplete input", "Please select at least one distance type.")
+			return False
+		return RadiusPage.validatePage(self)

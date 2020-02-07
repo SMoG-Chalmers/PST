@@ -31,17 +31,28 @@ class RadiusType(object):
 	ANGULAR=3
 	AXMETER=4
 
+RADIUS_PROP_NAMES = {
+	RadiusType.STRAIGHT : "rad_straight",
+	RadiusType.WALKING  : "rad_walking",
+	RadiusType.STEPS    : "rad_steps",
+	RadiusType.ANGULAR  : "rad_angular",
+	RadiusType.AXMETER  : "rad_axmeter"
+}
+
+def RadiusTypePropName(radius_type):
+	return RADIUS_PROP_NAMES[radius_type]
+
 def AddRadiusProperties(prop_sheet, radius_types):
 	if RadiusType.STRAIGHT in radius_types:
-		prop_sheet.addNumberProp("Straight line distance", 1000, 0, "meters",  "rad_straight", True, False)
+		prop_sheet.addNumberProp("Straight line distance", 1000, 0, "meters",  RadiusTypePropName(RadiusType.STRAIGHT), True, False)
 	if RadiusType.WALKING in radius_types:
-		prop_sheet.addNumberProp("Walking distance",       1000, 0, "meters",  "rad_walking", True, False)
+		prop_sheet.addNumberProp("Walking distance",       1000, 0, "meters",  RadiusTypePropName(RadiusType.WALKING),  True, False)
 	if RadiusType.STEPS in radius_types:
-		prop_sheet.addNumberProp("Axial/segment steps",       2, 0, "steps",   "rad_steps", True, False)
+		prop_sheet.addNumberProp("Axial/segment steps",       2, 0, "steps",   RadiusTypePropName(RadiusType.STEPS),    True, False)
 	if RadiusType.ANGULAR in radius_types:
-		prop_sheet.addNumberProp("Angular",                 180, 0, "degrees", "rad_angular", True, False)
+		prop_sheet.addNumberProp("Angular",                 180, 0, "degrees", RadiusTypePropName(RadiusType.ANGULAR),  True, False)
 	if RadiusType.AXMETER in radius_types:
-		prop_sheet.addNumberProp("Axialmeter",             2000, 0, "steps*m", "rad_axmeter", True, False)
+		prop_sheet.addNumberProp("Axialmeter",             2000, 0, "steps*m", RadiusTypePropName(RadiusType.AXMETER),  True, False)
 
 class RadiusWidget(PropertySheetWidget):
 	def __init__(self, wizard_page, radius_types):

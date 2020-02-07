@@ -25,5 +25,5 @@ from .finishpage import FinishPage
 from .graphinputpage import GraphInputPage
 from .networkinputpage import NetworkInputPage
 from .progresspage import ProgressPage
-from .radiuspage import RadiusPage, AddRadiusProperties, RadiusWidget, RadiusType
+from .radiuspage import RadiusPage, AddRadiusProperties, RadiusWidget, RadiusType, RadiusTypePropName
 from .readypage import ReadyPage
