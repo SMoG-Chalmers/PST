@@ -69,3 +69,10 @@ PSTADllExport void PSTAAngularIntegrationNormalizeLengthWeight(const float* reac
 // reached_length = sum of lengths of all reached nodes
 PSTADllExport void PSTAAngularIntegrationSyntaxNormalize(const unsigned int* N, const float* TD, unsigned int count, float* out_normalized_score);
 PSTADllExport void PSTAAngularIntegrationSyntaxNormalizeLengthWeight(const float* reached_length, const float* TD, unsigned int count, float* out_normalized_score);
+
+// Hillier Normalization
+// N = number of reached nodes INCLUDING origin node
+// TD = total depth
+// reached_length = sum of lengths of all reached nodes
+PSTADllExport void PSTAAngularIntegrationHillierNormalize(const unsigned int* N, const float* TD, unsigned int count, float* out_normalized_score);
+PSTADllExport void PSTAAngularIntegrationHillierNormalizeLengthWeight(const float* reached_length, const float* TD, unsigned int count, float* out_normalized_score);

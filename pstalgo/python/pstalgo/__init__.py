@@ -19,7 +19,7 @@ You should have received a copy of the GNU General Public License
 along with PST. If not, see <http://www.gnu.org/licenses/>.
 """
 
-from .angularintegration import AngularIntegration, AngularIntegrationNormalize, AngularIntegrationNormalizeLengthWeight, AngularIntegrationSyntaxNormalize, AngularIntegrationSyntaxNormalizeLengthWeight
+from .angularintegration import AngularIntegration, AngularIntegrationNormalize, AngularIntegrationNormalizeLengthWeight, AngularIntegrationSyntaxNormalize, AngularIntegrationSyntaxNormalizeLengthWeight, AngularIntegrationHillierNormalize, AngularIntegrationHillierNormalizeLengthWeight
 from .attractiondistance import AttractionDistance
 from .attractionreach import AttractionReach, AttractionScoreAccumulationMode, AttractionWeightFunction, AttractionDistributionFunc, AttractionCollectionFunc
 from .callbacktest import CallbackTest

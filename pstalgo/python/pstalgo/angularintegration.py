@@ -108,3 +108,17 @@ def AngularIntegrationSyntaxNormalizeLengthWeight(total_length, total_depth, cou
 		UnpackArray(total_depth, 'f')[0],
 		c_uint(count),
 		UnpackArray(out_scores, 'f')[0])
+
+def AngularIntegrationHillierNormalize(node_counts, total_depth, count, out_scores):
+	_DLL.PSTAAngularIntegrationHillierNormalize(
+		UnpackArray(node_counts, 'I')[0],
+		UnpackArray(total_depth, 'f')[0],
+		c_uint(count),
+		UnpackArray(out_scores, 'f')[0])
+
+def AngularIntegrationHillierNormalizeLengthWeight(total_length, total_depth, count, out_scores):
+	_DLL.PSTAAngularIntegrationHillierNormalizeLengthWeight(
+		UnpackArray(total_length, 'f')[0],
+		UnpackArray(total_depth, 'f')[0],
+		c_uint(count),
+		UnpackArray(out_scores, 'f')[0])

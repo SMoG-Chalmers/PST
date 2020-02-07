@@ -67,3 +67,15 @@ PSTADllExport void PSTAAngularIntegrationSyntaxNormalizeLengthWeight(const float
 	for (unsigned int i = 0; i < count; ++i)
 		out_normalized_score[i] = std::pow(reached_length[i], 1.2f) / (TDL[i] + 1.0f);
 }
+
+PSTADllExport void PSTAAngularIntegrationHillierNormalize(const unsigned int* N, const float* TD, unsigned int count, float* out_normalized_score)
+{
+	for (unsigned int i = 0; i < count; ++i)
+		out_normalized_score[i] = (float)N[i]*(float)N[i] / (TD[i] + 1.0f);
+}
+
+PSTADllExport void PSTAAngularIntegrationHillierNormalizeLengthWeight(const float* reached_length, const float* TDL, unsigned int count, float* out_normalized_score)
+{
+	for (unsigned int i = 0; i < count; ++i)
+		out_normalized_score[i] = reached_length[i]*reached_length[i] / (TDL[i] + 1.0f);
+}

@@ -31,31 +31,31 @@ class TestAngularIntegration(unittest.TestCase):
 		count = 5
 		length = 3
 		g = CreateSegmentChainGraph(count, length)
-		self.doTest(g, count, False, Radii(), [count]*count, [0]*count, None, [4]*count, [math.pow(count,1.2)]*count)
-		self.doTest(g, count, True,  Radii(), [count]*count, [0]*count, None, None, None)
-		self.doTest(g, count, False, Radii(straight=0), [1]*count, None, None, None, None)
-		self.doTest(g, count, False, Radii(straight=1), [1]*count, None, None, None, None)
-		self.doTest(g, count, False, Radii(straight=length), [2, 3, 3, 3, 2], None, None, None, None)
-		self.doTest(g, count, False, Radii(walking=0), [1]*count, None, None, None, None)
-		self.doTest(g, count, False, Radii(walking=1), [1]*count, None, None, None, None)
-		self.doTest(g, count, False, Radii(walking=3), [2, 3, 3, 3, 2], None, None, None, None)
-		self.doTest(g, count, False, Radii(steps=0), [1]*count, None, None, None, None)
-		self.doTest(g, count, False, Radii(steps=1), [2, 3, 3, 3, 2], None, None, None, None)
-		self.doTest(g, count, False, Radii(steps=2), [3, 4, 5, 4, 3], None, None, None, None)
-		self.doTest(g, count, False, Radii(angular=1), [count]*count, None, None, None, None)
+		self.doTest(g, count, False, Radii(), [count]*count, [0]*count, None, [4]*count, [math.pow(count,1.2)]*count, [count*count]*count)
+		self.doTest(g, count, True,  Radii(), [count]*count, [0]*count, None, None, None, None)
+		self.doTest(g, count, False, Radii(straight=0), [1]*count, None, None, None, None, None)
+		self.doTest(g, count, False, Radii(straight=1), [1]*count, None, None, None, None, None)
+		self.doTest(g, count, False, Radii(straight=length), [2, 3, 3, 3, 2], None, None, None, None, None)
+		self.doTest(g, count, False, Radii(walking=0), [1]*count, None, None, None, None, None)
+		self.doTest(g, count, False, Radii(walking=1), [1]*count, None, None, None, None, None)
+		self.doTest(g, count, False, Radii(walking=3), [2, 3, 3, 3, 2], None, None, None, None, None)
+		self.doTest(g, count, False, Radii(steps=0), [1]*count, None, None, None, None, None)
+		self.doTest(g, count, False, Radii(steps=1), [2, 3, 3, 3, 2], None, None, None, None, None)
+		self.doTest(g, count, False, Radii(steps=2), [3, 4, 5, 4, 3], None, None, None, None, None)
+		self.doTest(g, count, False, Radii(angular=1), [count]*count, None, None, None, None, None)
 		pstalgo.FreeSegmentGraph(g)
 
 	def test_aint_square(self):
 		count = 4
 		length = 3
 		g = CreateSegmentSquareGraph(length)
-		self.doTest(g, count, False, Radii(), [count]*count, [4]*count, None, [float(count-1)/5]*count, [math.pow(count,1.2)/5]*count)
-		self.doTest(g, count, True,  Radii(), [count]*count, [4]*count, None, [9.0/13.0]*count, [math.pow(9,1.2)/13.0]*count)
-		self.doTest(g, count, False, Radii(angular=80), [1]*count, [0]*count, None, None, None)
-		self.doTest(g, count, False, Radii(angular=100), [3]*count, [2]*count, None, None, None)
+		self.doTest(g, count, False, Radii(), [count]*count, [4]*count, None, [float(count-1)/5]*count, [math.pow(count,1.2)/5]*count, None)
+		self.doTest(g, count, True,  Radii(), [count]*count, [4]*count, None, [9.0/13.0]*count, [math.pow(9,1.2)/13.0]*count, None)
+		self.doTest(g, count, False, Radii(angular=80), [1]*count, [0]*count, None, None, None, None)
+		self.doTest(g, count, False, Radii(angular=100), [3]*count, [2]*count, None, None, None, None)
 		pstalgo.FreeSegmentGraph(g)
 
-	def doTest(self, graph, line_count, weigh_by_length, radius, N, TD, TDW, aint_norm, aint_syntax):
+	def doTest(self, graph, line_count, weigh_by_length, radius, N, TD, TDW, aint_norm, aint_syntax_norm, aint_hillier_norm):
 		node_counts = array.array('I', [0])*line_count
 		total_depths = array.array('f', [0])*line_count
 		total_lengths = array.array('f', [0])*line_count
@@ -82,10 +82,17 @@ class TestAngularIntegration(unittest.TestCase):
 			else:
 				pstalgo.AngularIntegrationNormalize(node_counts, total_depths, line_count, scores)
 			self.assertTrue(IsArrayRoughlyEqual(scores, aint_norm), text + " " + str(scores) + " != " + str(aint_norm))
-		if aint_syntax is not None:
+		if aint_syntax_norm is not None:
 			scores = array.array('f', [0])*line_count
 			if weigh_by_length:
 				pstalgo.AngularIntegrationSyntaxNormalizeLengthWeight(total_lengths, total_depth_lengths, line_count, scores)
 			else:
 				pstalgo.AngularIntegrationSyntaxNormalize(node_counts, total_depths, line_count, scores)
-			self.assertTrue(IsArrayRoughlyEqual(scores, aint_syntax), text + " " + str(scores) + " != " + str(aint_syntax))
+			self.assertTrue(IsArrayRoughlyEqual(scores, aint_syntax_norm), text + " " + str(scores) + " != " + str(aint_syntax_norm))
+		if aint_hillier_norm is not None:
+			scores = array.array('f', [0])*line_count
+			if weigh_by_length:
+				pstalgo.AngularIntegrationHillierNormalizeLengthWeight(total_lengths, total_depth_lengths, line_count, scores)
+			else:
+				pstalgo.AngularIntegrationHillierNormalize(node_counts, total_depths, line_count, scores)
+			self.assertTrue(IsArrayRoughlyEqual(scores, aint_hillier_norm), text + " " + str(scores) + " != " + str(aint_hillier_norm))
