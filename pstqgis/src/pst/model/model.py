@@ -111,22 +111,22 @@ class QGISModel(object):
 
 	def makeThematic(self, table, column, ranges):
 		layer = self._layerFromName(table)
-		old_renderer = layer.rendererV2()
-		symbol_props = None if isinstance(old_renderer, QgsCategorizedSymbolRendererV2) else layer.rendererV2().symbol().symbolLayer(0).properties()
-		layer.setRendererV2(self._createCategoryRenderer(symbol_props, column, ranges))
+		old_renderer = layer.renderer()
+		symbol_props = None if isinstance(old_renderer, QgsCategorizedSymbolRenderer) else old_renderer.symbol().symbolLayer(0).properties()
+		layer.setRenderer(self._createCategoryRenderer(symbol_props, column, ranges))
 		self._refreshLayer(layer)
 
 	def _createCategoryRenderer(self, symbol_props, column, ranges):
 		categories = []
 		for r in ranges:
 			if symbol_props is None:
-				symbol = QgsLineSymbolV2.createSimple({})
+				symbol = QgsLineSymbol.createSimple({})
 				symbol.setColor(QColor(*r[1]))
 			else:
 				symbol_props['line_color'] = ','.join([str(b) for b in r[1]])
-				symbol = QgsLineSymbolV2.createSimple(symbol_props)
-			categories.append(QgsRendererCategoryV2(r[2], symbol, r[0]))
-		return QgsCategorizedSymbolRendererV2(column, categories)
+				symbol = QgsLineSymbol.createSimple(symbol_props)
+			categories.append(QgsRendererCategory(r[2], symbol, r[0]))
+		return QgsCategorizedSymbolRenderer(column, categories)
 
 	def cloneTable(self, table, new_name):
 		base_layer = self._layerFromName(table)
@@ -363,6 +363,6 @@ class QGISModel(object):
 		# If caching is enabled, a simple canvas refresh might not be sufficient
 		# to trigger a redraw and you must clear the cached image for the layer
 		if qgis.utils.iface.mapCanvas().isCachingEnabled():
-			layer.setCacheImage(None)
+			layer.triggerRepaint()
 		else:
 			qgis.utils.iface.mapCanvas().refresh()
