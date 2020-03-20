@@ -23,6 +23,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 #include <future>
 #include <memory>
 #include <queue>
+#include <cstring>
 
 #include <pstalgo/analyses/ODBetweenness.h>
 #include <pstalgo/experimental/ShortestPathTraversal.h>

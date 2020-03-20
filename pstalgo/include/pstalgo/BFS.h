@@ -22,6 +22,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 #pragma once
 
 #include <vector>
+#include <cstring>
 
 #include "Limits.h"
 #include "Vec2.h"

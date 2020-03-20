@@ -22,6 +22,8 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 #include <algorithm>
 #include <cstdlib>
 #include <stdexcept>
+#include <cstring>
+
 #include <pstalgo/experimental/SparseDirectedGraph.h>
 
 namespace

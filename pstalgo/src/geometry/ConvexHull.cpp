@@ -20,6 +20,8 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include <algorithm>
+#include <cstring>
+
 #include <pstalgo/Debug.h>
 #include <pstalgo/geometry/ConvexHull.h>
 
