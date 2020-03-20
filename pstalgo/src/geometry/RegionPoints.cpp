@@ -20,6 +20,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include <vector>
+#include <stdexcept>
 #include <pstalgo/Vec2.h>
 
 template <typename TVec> bool TIsPolygonSeparatorPoint(const TVec& pt)

@@ -21,7 +21,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 #include <algorithm>
 #include <cmath>
-#include <pstalgo/Maths.h>
+#include <pstalgo/maths.h>
 #include <pstalgo/geometry/Rect.h>
 
 bool TestAABBCircleOverlap(const float2& bb_half_size, const float2& circle_center, float circle_radius)

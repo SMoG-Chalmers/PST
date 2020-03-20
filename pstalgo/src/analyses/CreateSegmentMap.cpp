@@ -463,7 +463,7 @@ public:
 			{
 				for (unsigned int o = s.m_FirstObject; o < s.m_FirstObject + s.m_Count; ++o)
 				{
-					if (isnan(points[o].x))
+					if (std::isnan(points[o].x))
 						continue;  // point is already unlinked
 					const float dist_sqr = (unlink_pos - points[o]).getLengthSqr();
 					if (-1 == closest_index || dist_sqr < closest_dist_sqr)
@@ -480,7 +480,7 @@ public:
 		unsigned int n = 0;
 		for (unsigned int i = 0; i < cuts.size(); ++i)
 		{
-			if (!isnan(points[cut_to_point[i]].x))
+			if (!std::isnan(points[cut_to_point[i]].x))
 				cuts[n++] = cuts[i];
 		}
 		cuts.resize(n);

@@ -22,7 +22,9 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 #pragma once
 
 #include <pstalgo/Debug.h>
+
 #include <vector>
+#include <cstring>
 
 
 // This is a very specialized priority queue that has been specifically optimized for

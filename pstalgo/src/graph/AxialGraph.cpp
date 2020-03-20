@@ -21,7 +21,8 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 
 #include <algorithm>
-#include <math.h>
+#include <cmath>
+#include <cstring>
 
 #include <pstalgo/Debug.h>
 #include <pstalgo/graph/AxialGraph.h>
