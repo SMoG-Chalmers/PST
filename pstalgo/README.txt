@@ -17,7 +17,7 @@ Visual C++ (Windows):
     The project will generate intermediate files in the directory 'build',
     and output the built library files in the directory 'bin'.
 
-CMake (Only tested on Mac OS X):
+CMake (Tested on Mac OS X and Ubuntu 18.04):
     - Create an empty folder called 'build'
         > mkdir build
     - Change directory to the build folder
