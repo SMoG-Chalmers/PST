@@ -40,6 +40,8 @@ def GetLibFileName():
 		return 'pstalgo' + ('64' if Is64Bit() else '32') + ('d' if DebugEnabled() else '') + '.dll'
 	elif 'Darwin' == platform.system():
 		return 'libpstalgo.dylib'
+	elif 'Linux' == platform.system():
+		return 'libpstalgo.so'
 	raise Exception("Unsupported plataform: %s" & platform.system())
 
 
