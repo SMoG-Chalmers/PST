@@ -19,6 +19,7 @@ You should have received a copy of the GNU General Public License
 along with PST. If not, see <http://www.gnu.org/licenses/>.
 """
 
+from .angularbetweennesswiz import AngularBetweennessWiz
 from .angularchoicewiz import AngularChoiceWiz
 from .angularintegrationwiz import AngularIntegrationWiz
 from .attractionbetweennesswiz import AttractionBetweennessWiz

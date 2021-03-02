@@ -25,13 +25,18 @@ from .common import _DLL, PSTALGO_PROGRESS_CALLBACK, CreateCallbackWrapper, Unpa
 
 class SPSTAFastSegmentBetweennessDesc(Structure) :
 	_fields_ = [
+		("m_Version", c_uint),
+
 		# Graph
 		("m_Graph", c_void_p),
 
 		# Distance type
 		("m_DistanceType", ctypes.c_ubyte),  # DistanceType enum in common.py
+		
+		# Weight mode
+		("m_WeighByLength", ctypes.c_bool),
 
-		# Radius
+		# Radius (only WALKING supported)
 		("m_Radius", Radii),
 
 		# Progress Callback
@@ -40,19 +45,24 @@ class SPSTAFastSegmentBetweennessDesc(Structure) :
 
 		# Outputs (optional)
 		("m_OutBetweenness", POINTER(c_float)),
+		("m_OutNodeCount",   POINTER(c_uint)),
+		("m_OutTotalDepth",  POINTER(c_float)),
 	]
 	def __init__(self, *args):
 		Structure.__init__(self, *args)
-		self.m_Version = 1
+		self.m_Version = 2
 
-def FastSegmentBetweenness(graph_handle, distance_type, radius, progress_callback = None, out_betweenness = None):
+def FastSegmentBetweenness(graph_handle, distance_type, weigh_by_length, radius, progress_callback = None, out_betweenness = None, out_node_count = None, out_total_depth = None):
 	desc = SPSTAFastSegmentBetweennessDesc()
 	desc.m_Graph = graph_handle
 	desc.m_DistanceType = distance_type
+	desc.m_WeighByLength = weigh_by_length
 	desc.m_Radius = radius
 	desc.m_ProgressCallback = CreateCallbackWrapper(progress_callback)
 	desc.m_ProgressCallbackUser = c_void_p() 
 	desc.m_OutBetweenness = UnpackArray(out_betweenness, 'f')[0]  
+	desc.m_OutNodeCount = UnpackArray(out_node_count, 'I')[0]  
+	desc.m_OutTotalDepth = UnpackArray(out_total_depth, 'f')[0]  
 	# Make the call
 	fn = _DLL.PSTAFastSegmentBetweenness
 	fn.restype = ctypes.c_bool

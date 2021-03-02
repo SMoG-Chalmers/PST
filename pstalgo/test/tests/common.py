@@ -26,7 +26,7 @@ def IsRoughlyEqual(v0, v1, max_rel_diff=0.0001):
 
 def IsArrayRoughlyEqual(a0, a1, max_rel_diff=0.0001):
 	if len(a0) != len(a1):
-		return False
+		raise Exception("Array lengths do not match, %d != %d" % (len(a0), len(a1)))
 	for i in range(len(a0)):
 		if not IsRoughlyEqual(a0[i], a1[i], max_rel_diff):
 			return False

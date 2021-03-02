@@ -23,47 +23,71 @@ import array
 import unittest
 import pstalgo
 from pstalgo import DistanceType
+from .common import IsArrayRoughlyEqual
 
 class TestFastSegmentBetweenness(unittest.TestCase):
 
 	def test_five_chain(self):
-		graph = self.create_chain_graph(5)
-		betweenness = array.array('f', [0])*5  # Fastest way of allocating arrays of array.array-type
+		line_length = 3
+		line_length_sqr = line_length * line_length
+		graph = self.create_chain_graph(line_count=5, line_length=line_length)
+		betweenness  = array.array('f', [0])*5  # Fastest way of allocating arrays of array.array-type
+		node_counts  = array.array('I', [0])*5
+		total_depths = array.array('f', [0])*5
 		pstalgo.FastSegmentBetweenness(
 			graph_handle = graph,
 			distance_type = DistanceType.STEPS, 
+			weigh_by_length = True,
 			radius = pstalgo.Radii(steps=4),
-			out_betweenness = betweenness)
+			out_betweenness = betweenness,
+			out_node_count = node_counts, 
+			out_total_depth = total_depths)
 		pstalgo.FreeSegmentGraph(graph)
-		self.assertEqual(betweenness, array.array('f', [0, 3, 4, 3, 0]))
+		self.assertEqual(betweenness,  array.array('f', [0, 3*line_length_sqr, 4*line_length_sqr, 3*line_length_sqr, 0]))
+		self.assertEqual(node_counts,  array.array('I', [5, 5, 5, 5, 5]))
+		self.assertEqual(total_depths, array.array('f', [0, 0, 0, 0, 0]))
 
 	def test_split(self):
 		graph = self.create_split_graph()
-		betweenness = array.array('f', [0])*6  # Fastest way of allocating arrays of array.array-type
+		betweenness  = array.array('f', [0])*6  # Fastest way of allocating arrays of array.array-type
+		node_counts  = array.array('I', [0])*6
+		total_depths = array.array('f', [0])*6
 		pstalgo.FastSegmentBetweenness(
 			graph_handle = graph,
-			distance_type = DistanceType.ANGULAR, 
+			distance_type = DistanceType.ANGULAR,
+			weigh_by_length = False,
 			radius = pstalgo.Radii(angular=45),
-			out_betweenness = betweenness)
+			out_betweenness = betweenness,
+			out_node_count = node_counts, 
+			out_total_depth = total_depths)
 		pstalgo.FreeSegmentGraph(graph)
-		self.assertEqual(betweenness, array.array('f', [0, 2, 2, 2, 2, 0]))
+		self.assertEqual(betweenness,  array.array('f', [0, 2, 2, 2, 2, 0]))
+		self.assertEqual(node_counts,  array.array('I', [6, 6, 6, 6, 6, 6]))
+		self.assertTrue(IsArrayRoughlyEqual(total_depths, [0.77, 4.26, 4.26, 4.26, 4.26, 0.77], 0.01))
 
 	def test_split2(self):
 		graph = self.create_split_graph2()
-		betweenness = array.array('f', [0])*6  # Fastest way of allocating arrays of array.array-type
+		betweenness  = array.array('f', [0])*6  # Fastest way of allocating arrays of array.array-type
+		node_counts  = array.array('I', [0])*6
+		total_depths = array.array('f', [0])*6
 		pstalgo.FastSegmentBetweenness(
 			graph_handle = graph,
 			distance_type = DistanceType.ANGULAR, 
+			weigh_by_length = False,
 			radius = pstalgo.Radii(angular=45),
-			out_betweenness = betweenness)
+			out_betweenness = betweenness,
+			out_node_count = node_counts, 
+			out_total_depth = total_depths)
 		pstalgo.FreeSegmentGraph(graph)
 		self.assertEqual(betweenness, array.array('f', [0, 1, 1, 3, 3, 0]))
+		self.assertEqual(node_counts,  array.array('I', [6, 6, 6, 6, 6, 6]))
+		self.assertTrue(IsArrayRoughlyEqual(total_depths, [0.26, 4.24, 4.24, 3.87, 3.87, 0.26], 0.02))
 
-	def create_chain_graph(self, line_count):
+	def create_chain_graph(self, line_count, line_length = 1):
 		# --...--
 		line_coords = []	
 		for x in range(line_count+1): 
-			line_coords.append(x)
+			line_coords.append(x*line_length)
 			line_coords.append(0)
 		line_indices = []	
 		for i in range(line_count): 

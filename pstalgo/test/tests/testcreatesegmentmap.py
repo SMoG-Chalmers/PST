@@ -33,5 +33,5 @@ class TestCreateSegmentMap(unittest.TestCase):
         polys = array.array('i', [
             2,
         ])
-        (res, algo) = pstalgo.CreateSegmentMap(coords, polys)  # , tail=50, progress_callback=self._pstalgo.CreateAnalysisDelegateCallbackWrapper(delegate))
+        (res, algo) = pstalgo.CreateSegmentMap(pstalgo.common.RoadNetworkType.AXIAL_OR_SEGMENT, coords, polys)  # , tail=50, progress_callback=self._pstalgo.CreateAnalysisDelegateCallbackWrapper(delegate))
         pstalgo.Free(algo)

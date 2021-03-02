@@ -62,6 +62,13 @@ enum EPSTADistanceTypeMask
 	EPSTADistanceTypeMask_Axmeter  = EPSTADistanceMaskFromType(EPSTADistanceType_Axmeter),
 };
 
+enum EPSTARoadNetworkType
+{
+	EPSTARoadNetworkType_Unknown         = 0,
+	EPSTARoadNetworkType_AxialOrSegment  = 1,
+	EPSTARoadNetworkType_RoadCenterLines = 2,
+};
+
 struct PSTADllExportClass SPSTARadii
 {
 	SPSTARadii();

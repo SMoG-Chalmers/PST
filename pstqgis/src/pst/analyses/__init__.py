@@ -20,6 +20,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 """
 
 from .angularchoiceanalysis import AngularChoiceAnalysis
+from .angularbetweennessanalysis import AngularBetweennessAnalysis
 from .angularintegrationanalysis import AngularIntegrationAnalysis
 from .attractionbetweennessanalysis import AttractionBetweennessAnalysis
 from .attractiondistanceanalysis import AttractionDistanceAnalysis

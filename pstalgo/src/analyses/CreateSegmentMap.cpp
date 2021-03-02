@@ -185,12 +185,32 @@ public:
 			// Unlink
 			if (desc.m_UnlinkCount)
 			{
+				if (EPSTARoadNetworkType_AxialOrSegment != desc.m_RoadNetworkType) {
+					throw std::exception("Unlinks are only allowed for axial/segment road networks");
+				}
 				progress.SetCurrentTask(ETask_Unlinks);
 				std::vector<float2> unlinks;
 				unlinks.reserve(desc.m_UnlinkCount);
 				for (unsigned int i = 0; i < desc.m_UnlinkCount * 2; i += 2)
 					unlinks.push_back(float2((float)(desc.m_UnlinkCoords[i] - center_x), (float)(desc.m_UnlinkCoords[i + 1] - center_y)));
 				ProcessUnlinks(cuts, unlinks.data(), (unsigned int)unlinks.size());
+			}
+
+			// Output unlinks if road-center-lines
+			if (EPSTARoadNetworkType_RoadCenterLines == desc.m_RoadNetworkType && !cuts.empty())
+			{
+				m_OutUnlinks.resize(cuts.size());
+				for (size_t i = 0; i < cuts.size(); ++i) {
+					m_OutUnlinks[i].x = center_x + cuts[i].m_Point.x;
+					m_OutUnlinks[i].y = center_y + cuts[i].m_Point.y;
+				}
+			}
+			res.m_UnlinkCoords = m_OutUnlinks.empty() ? nullptr : (double*)m_OutUnlinks.data();
+			res.m_UnlinkCount = (unsigned int)m_OutUnlinks.size();
+
+			// Do not allow cuts during segment generation if road-center-lines
+			if (EPSTARoadNetworkType_RoadCenterLines == desc.m_RoadNetworkType) {
+				cuts.clear();
 			}
 
 			// Generate segments
@@ -795,19 +815,29 @@ public:
 		segments.resize(new_count);
 	}
 
-public:
-
+private:
 	std::vector<SSegmentLine> m_Segments;
 	std::vector<double> m_Points;
+	std::vector<double2> m_OutUnlinks;
 };
 
 PSTADllExport IPSTAlgo* PSTACreateSegmentMap(const SCreateSegmentMapDesc* desc, SCreateSegmentMapRes* res)
 {
-	if ((desc->VERSION != desc->m_Version) ||
-		(res->VERSION != res->m_Version))
-		return nullptr;
+	try {
+		if ((desc->VERSION != desc->m_Version) ||
+			(res->VERSION != res->m_Version)) {
+			throw std::exception("Version mismatch");
+		}
 
-	auto algo = std::unique_ptr<CCreateSegmentMap>(new CCreateSegmentMap);
+		auto algo = std::unique_ptr<CCreateSegmentMap>(new CCreateSegmentMap);
 
-	return algo->Run(*desc, *res) ? algo.release() : nullptr;
+		return algo->Run(*desc, *res) ? algo.release() : nullptr;
+	}
+	catch (const std::exception& e) {
+		LOG_ERROR(e.what());
+	}
+	catch (...) {
+		LOG_ERROR("Unknown exception");
+	}
+	return nullptr;
 }

@@ -220,13 +220,13 @@ def DistanceTypesFromSettings(pstalgo, props):
 	distance_types = []
 	if props.get('dist_straight'):  # Not always available
 		distance_types.append(pstalgo.DistanceType.STRAIGHT)
-	if props['dist_walking']:
+	if props.get('dist_walking'):
 		distance_types.append(pstalgo.DistanceType.WALKING)
-	if props['dist_steps']:
+	if props.get('dist_steps'):
 		distance_types.append(pstalgo.DistanceType.STEPS)
-	if props['dist_angular']:
+	if props.get('dist_angular'):
 		distance_types.append(pstalgo.DistanceType.ANGULAR)
-	if props['dist_axmeter']:
+	if props.get('dist_axmeter'):
 		distance_types.append(pstalgo.DistanceType.AXMETER)
 	return distance_types
 

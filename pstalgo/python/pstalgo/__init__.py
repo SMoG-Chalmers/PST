@@ -35,7 +35,7 @@ from .segmentbetweenness import SegmentBetweenness, BetweennessNormalize, Betwee
 from .fastsegmentbetweenness import FastSegmentBetweenness
 from .segmentgrouping import SegmentGrouping
 from .segmentgroupintegration import SegmentGroupIntegration
-from .common import Free, DistanceType, Radii, StandardNormalize, OriginType
+from .common import Free, DistanceType, Radii, StandardNormalize, OriginType, RoadNetworkType
 from .vector import Vector
 
 # TODO: Possibly move out of pstalgo module? This should probably be in an analysis module instead.

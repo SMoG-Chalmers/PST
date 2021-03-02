@@ -27,13 +27,18 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 struct SPSTAFastSegmentBetweennessDesc
 {
+	// Version
+	static const unsigned int VERSION = 2;
+	unsigned int m_Version = VERSION;
+
 	HPSTASegmentGraph m_Graph = nullptr;  // Created with a call to PSTACreateSegmentGraph
 
 	// Distance measurement
-	unsigned char m_DistanceType = EPSTADistanceType_Steps;  // enum EPSTADistanceType
+	unsigned char m_DistanceType = EPSTADistanceType_Angular;  // enum EPSTADistanceType, only ANGULAR supported
+	bool m_WeighByLength = false;  // NOT YET SUPPORTED
 
 	// Radius
-	SPSTARadii m_Radius;
+	SPSTARadii m_Radius;  // Only WALKING supported
 
 	// Progress Callback
 	FPSTAProgressCallback m_ProgressCallback = nullptr;
@@ -42,6 +47,8 @@ struct SPSTAFastSegmentBetweennessDesc
 	// Output
 	// These can either be NULL or pointer to arrays of one element per line
 	float*        m_OutBetweenness = nullptr;
+	unsigned int* m_OutNodeCount   = nullptr;  // NOT YET SUPPORTED   // Number of reached lines, INCLUDING origin line
+	float*        m_OutTotalDepth  = nullptr;  // NOT YET SUPPORTED 
 };
 
 PSTADllExport bool PSTAFastSegmentBetweenness(const SPSTAFastSegmentBetweennessDesc* desc);

@@ -61,9 +61,11 @@ class CreateSegmentMapAnalysis(BaseAnalysis):
 		algo = None
 
 		try:
+			road_network_type = pstalgo.RoadNetworkType.FromString(props['in_network_type'])
+
 			# Unlinks
 			unlinks = None
-			if props['in_unlinks_enabled']:
+			if props['in_unlinks_enabled'] and road_network_type == pstalgo.RoadNetworkType.AXIAL_OR_SEGMENT:
 				unlinks_table = props['in_unlinks']
 				max_count = model.rowCount(unlinks_table)
 				unlinks = Vector(ctypes.c_double, max_count*2, stack_allocator)
@@ -72,6 +74,7 @@ class CreateSegmentMapAnalysis(BaseAnalysis):
 			# --- ANALYSIS ---
 			progress.setCurrentTask(Tasks.ANALYSIS)
 			(res, algo) = pstalgo.CreateSegmentMap(
+				road_network_type = road_network_type,
 				poly_coords = coords,
 				poly_sections = polys,
 				unlinks = unlinks,
@@ -118,6 +121,10 @@ class CreateSegmentMapAnalysis(BaseAnalysis):
 					p1 = segments[i*3+1]
 					yield model.createLine(coords[p0*2], coords[p0*2+1], coords[p1*2], coords[p1*2+1])
 
+			def point_gen(coords, count):
+				for i in range(count):
+					yield model.createPoint(coords[i*2], coords[i*2+1])
+
 			# --- WRITE_RESULTS ---
 			progress.setCurrentTask(Tasks.WRITE_RESULTS)
 			model.createTable(
@@ -128,6 +135,17 @@ class CreateSegmentMapAnalysis(BaseAnalysis):
 				res.m_SegmentCount,
 				progress,
 				geo_type=GeometryType.LINE)
+
+			if road_network_type == pstalgo.RoadNetworkType.ROAD_CENTER_LINES and res.m_UnlinkCoords != None:
+				# Create Unlinks output table
+				model.createTable(
+					props['in_network'] + '_unlinks',
+					model.coordinateReferenceSystem(self._props['in_network']),
+					[],
+					point_gen(res.m_UnlinkCoords, res.m_UnlinkCount),
+					int(res.m_UnlinkCount),
+					progress,
+					geo_type=GeometryType.POINT)
 
 		finally:
 			stack_allocator.restore(initial_alloc_state)

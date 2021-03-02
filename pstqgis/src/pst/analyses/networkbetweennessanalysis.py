@@ -103,9 +103,7 @@ class NetworkBetweennessAnalysis(BaseAnalysis):
 			# Allocate output arrays
 			weights        = None
 			scores         = Vector(ctypes.c_float, line_count, stack_allocator, line_count)
-			scores_norm    = Vector(ctypes.c_float, line_count, stack_allocator, line_count) if props['norm_normalization'] else None
 			scores_std     = Vector(ctypes.c_float, line_count, stack_allocator, line_count) if props['norm_standard'] else None
-			scores_syntax  = Vector(ctypes.c_float, line_count, stack_allocator, line_count) if props['norm_syntax'] else None
 			total_counts   = Vector(ctypes.c_uint,  line_count, stack_allocator, line_count)
 			total_depths   = Vector(ctypes.c_float, line_count, stack_allocator, line_count)
 
@@ -167,18 +165,10 @@ class NetworkBetweennessAnalysis(BaseAnalysis):
 						# No normalization
 						if props['norm_none']:
 							columns.append((GenerateScoreColumnName(distance_mode, weight_mode, radii, ColName.NORM_NONE), 'float', scores.values()))
-						# Normalization
-						if scores_norm is not None:
-							pstalgo.BetweennessNormalize(scores, total_counts, scores.size(), scores_norm)
-							columns.append((GenerateScoreColumnName(distance_mode, weight_mode, radii, ColName.NORM_TURNER), 'float', scores_norm.values()))
 						# Standard normalization
 						if scores_std is not None:
 							pstalgo.StandardNormalize(scores, scores.size(), scores_std)
 							columns.append((GenerateScoreColumnName(distance_mode, weight_mode, radii, ColName.NORM_STANDARD), 'float', scores_std.values()))
-						# Syntax normalization
-						if scores_syntax is not None:
-							pstalgo.BetweennessSyntaxNormalize(scores, total_depths, scores.size(), scores_syntax)
-							columns.append((GenerateScoreColumnName(distance_mode, weight_mode, radii, ColName.NORM_SYNTAX_NACH), 'float', scores_syntax.values()))
 						# Node counts
 						if output_N:
 							columns.append((GenerateStatColumnName(ColName.EXTRA_NODE_COUNT,  distance_mode, radii), 'integer',  total_counts.values()))

@@ -30,6 +30,7 @@ class ColName(object):
 	ANGULAR_INTEGRATION       = "AI"
 	NETWORK_BETWEENNESS       = "NB"
 	ANGULAR_CHOICE            = "AC"
+	ANGULAR_BETWEENNESS       = "AB"
 	ATTRACTION_DISTANCE       = "AD"
 	ATTRACTION_REACH          = "AR"
 	ATTRACTION_BETWEENNESS    = "AB"

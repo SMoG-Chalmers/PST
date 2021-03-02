@@ -20,16 +20,16 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 """
 
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout
-from ..wizard import BaseWiz, BasePage, WizPropFloat
-from ..pages import NetworkInputPage, ColumnCopyPage, ReadyPage, ProgressPage, FinishPage
-
+from qgis.PyQt.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout, QComboBox
+from ..widgets import WidgetEnableCheckBox
+from ..wizard import BaseWiz, BasePage, WizProp, WizPropFloat
+from ..pages import ColumnCopyPage, ReadyPage, ProgressPage, FinishPage
 
 class CreateSegmentMapWiz(BaseWiz):
 	def __init__(self, parent, settings, model, task_factory):
 		BaseWiz.__init__(self, parent, settings, model, "Create Segment Map")
 		self._task_factory = task_factory
-		self.addPage(NetworkInputPage(point_src_available=False))
+		self.addPage(NetworkPage())
 		self.addPage(TrimmingPage())
 		self.addPage(ColumnCopyPage())
 		self.addPage(ReadyPage())
@@ -40,6 +40,78 @@ class CreateSegmentMapWiz(BaseWiz):
 		""" Creates, initializes and returns a task object. """
 		return self._task_factory(props)
 
+
+class NetworkPage(BasePage):
+
+	def __init__(self):
+		BasePage.__init__(self)
+		self.setTitle("Input Tables")
+		self.setSubTitle(" ")
+		self.createWidgets()
+
+	def createWidgets(self):
+		glayout = QGridLayout()
+
+		glayout.setColumnStretch(0, 0)
+		glayout.setColumnStretch(1, 1)
+
+		y = 0
+
+		glayout.addWidget(QLabel("Network Type"), y, 0)
+		self._networkTypeCombo = QComboBox()
+		self._networkTypeCombo.currentIndexChanged.connect(self.onNetworkTypeComboChanged)
+		self.regProp("in_network_type", WizProp(self._networkTypeCombo, ""))
+		glayout.addWidget(self._networkTypeCombo, y, 1)
+		y = y + 1
+
+		glayout.addWidget(QLabel("Network Table"), y, 0)
+		self._linesCombo = QComboBox()
+		self.regProp("in_network", WizProp(self._linesCombo, ""))
+		glayout.addWidget(self._linesCombo, y, 1)
+		y = y + 1
+
+		self._unlinksCombo = QComboBox()
+		self.regProp("in_unlinks", WizProp(self._unlinksCombo, ""))
+		self._unlinksCheck = WidgetEnableCheckBox("Unlinks", [self._unlinksCombo])
+		self.regProp("in_unlinks_enabled", WizProp(self._unlinksCheck, False))
+		glayout.addWidget(self._unlinksCheck, y, 0)
+		glayout.addWidget(self._unlinksCombo, y, 1)
+		y = y + 1
+
+		glayout.setRowStretch(y, 1)
+
+		self.setLayout(glayout)
+
+	def initializePage(self):
+		# Network type combo
+		import pstalgo  # Do it here when it is needed instead of on plugin load
+		networkTypes = [
+			pstalgo.RoadNetworkType.AXIAL_OR_SEGMENT,
+			pstalgo.RoadNetworkType.ROAD_CENTER_LINES,
+		]
+		self._networkTypeCombo.clear()
+		for networkType in networkTypes:
+			self._networkTypeCombo.addItem(pstalgo.RoadNetworkType.ToString(networkType))
+
+		# Table combos
+		table_combos = [self._linesCombo]
+		if self._unlinksCombo is not None:
+			table_combos.append(self._unlinksCombo)
+		for combo in table_combos:
+			combo.clear()
+		for name in self.model().tableNames():
+			for combo in table_combos:
+				combo.addItem(name)
+
+	def onNetworkTypeComboChanged(self, index):
+		self.updateUnlinksAvailability()
+
+	def updateUnlinksAvailability(self):
+		import pstalgo  # Do it here when it is needed instead of on plugin load
+		networkType = pstalgo.RoadNetworkType.FromString(self._networkTypeCombo.currentText())
+		unlinksAvailable = (networkType == pstalgo.RoadNetworkType.AXIAL_OR_SEGMENT)
+		self._unlinksCheck.setVisible(unlinksAvailable)
+		self._unlinksCombo.setVisible(unlinksAvailable)
 
 class TrimmingPage(BasePage):
 	def __init__(self):

@@ -63,6 +63,27 @@ class OriginType:
 	LINES = 2
 	POINT_GROUPS = 3
 
+class RoadNetworkType:
+	UNKNOWN           = 0
+	AXIAL_OR_SEGMENT  = 1
+	ROAD_CENTER_LINES = 2
+
+	@staticmethod
+	def FromString(s):
+		for k, v in RoadNetworkTypeStrings.items():
+			if s == v:
+				return k
+		raise Exception("Unknown road network type '%s'" % s)
+
+	@staticmethod
+	def ToString(road_network_type):
+		return RoadNetworkTypeStrings[road_network_type]
+	
+RoadNetworkTypeStrings = {
+	RoadNetworkType.AXIAL_OR_SEGMENT  : "Axial/Segment Lines",
+	RoadNetworkType.ROAD_CENTER_LINES : "Road Centre Lines",
+}
+
 
 class Radii(ctypes.Structure) :
 	MASK_STRAIGHT = 1

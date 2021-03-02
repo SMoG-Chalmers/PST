@@ -22,13 +22,14 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 #pragma once
 
 #include <pstalgo/pstalgo.h>
+#include "Common.h"
 
 struct SCreateSegmentMapDesc
 {
 	SCreateSegmentMapDesc() : m_Version(VERSION) {}
 
 	// Version
-	static const unsigned int VERSION = 1;
+	static const unsigned int VERSION = 2;
 	unsigned int m_Version;
 
 	// Thresholds
@@ -37,6 +38,9 @@ struct SCreateSegmentMapDesc
 	float m_MinTail;
 	float m_Min3NodeColinearDeviation;
 
+	// Network Type
+	unsigned char m_RoadNetworkType;  // EPSTARoadNetworkType
+
 	// Polylines
 	double*      m_PolyCoords;
 	int*         m_PolySections;
@@ -44,7 +48,7 @@ struct SCreateSegmentMapDesc
 	unsigned int m_PolySectionCount;
 	unsigned int m_PolyCount;
 
-	// Unlinks
+	// Unlinks. Only allowed if m_RoadNetworkType == EPSTARoadNetworkType_AxialOrSegment.
 	double*      m_UnlinkCoords;
 	unsigned int m_UnlinkCount;
 
@@ -58,13 +62,17 @@ struct SCreateSegmentMapRes
 	SCreateSegmentMapRes() : m_Version(VERSION) {}
 
 	// Version
-	static const unsigned int VERSION = 1;
+	static const unsigned int VERSION = 2;
 	unsigned int m_Version;
 
 	// Segments
 	double*       m_SegmentCoords;
 	unsigned int* m_Segments;  // (P0, P1, Base)
 	unsigned int  m_SegmentCount;
+
+	// Unlinks. Only available if m_RoadNetworkType == EPSTARoadNetworkType_RoadCenterLines.
+	double*      m_UnlinkCoords;
+	unsigned int m_UnlinkCount;
 };
 
 PSTADllExport IPSTAlgo* PSTACreateSegmentMap(const SCreateSegmentMapDesc* desc, SCreateSegmentMapRes* res);

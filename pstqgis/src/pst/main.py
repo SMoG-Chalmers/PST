@@ -26,7 +26,7 @@ from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QMessageBox
 from qgis.core import *
 from qgis.core import Qgis
-from .analyses import SplitPolylinesAnalysis, CreateSegmentMapAnalysis, CreateJunctionsAnalysis, ReachAnalysis, NetworkIntegrationAnalysis, AngularIntegrationAnalysis, NetworkBetweennessAnalysis, AngularChoiceAnalysis, AttractionDistanceAnalysis, AttractionReachAnalysis, AttractionBetweennessAnalysis
+from .analyses import SplitPolylinesAnalysis, CreateSegmentMapAnalysis, CreateJunctionsAnalysis, ReachAnalysis, NetworkIntegrationAnalysis, AngularIntegrationAnalysis, NetworkBetweennessAnalysis, AngularChoiceAnalysis, AngularBetweennessAnalysis, AttractionDistanceAnalysis, AttractionReachAnalysis, AttractionBetweennessAnalysis
 from .model import QGISModel, Settings
 from .ui import wizards
 from . import APP_TITLE
@@ -70,6 +70,7 @@ class PSTPlugin(object):
 			('Network Integration',    lambda : self.onAnalysis(wizards.NetworkIntegrationWiz,    NetworkIntegrationAnalysis), None),
 			('Angular Integration',    lambda : self.onAnalysis(wizards.AngularIntegrationWiz,    AngularIntegrationAnalysis), None),
 			('Network Betweenness',    lambda : self.onAnalysis(wizards.NetworkBetweennessWiz,    NetworkBetweennessAnalysis), None),
+			('Angular Betweenness',    lambda : self.onAnalysis(wizards.AngularBetweennessWiz,    AngularBetweennessAnalysis), None),
 			('Angular Choice',         lambda : self.onAnalysis(wizards.AngularChoiceWiz,         AngularChoiceAnalysis), None),
 			('Attraction Distance',    lambda : self.onAnalysis(wizards.AttractionDistanceWiz,    AttractionDistanceAnalysis), None),
 			('Attraction Reach',       lambda : self.onAnalysis(wizards.AttractionReachWiz,       AttractionReachAnalysis), None),

@@ -40,8 +40,6 @@ class AngularChoiceAnalysis(BaseAnalysis):
 		Vector = pstalgo.Vector
 		props = self._props
 
-		radii_list = RadiiFromSettings(pstalgo, self._props).split()
-
 		def GenerateScoreColumnName(length_weight_enabled, radii, norm):
 			return GenColName(
 				ColName.ANGULAR_CHOICE,

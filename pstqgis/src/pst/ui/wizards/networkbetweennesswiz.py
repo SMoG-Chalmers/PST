@@ -50,14 +50,11 @@ class CalcOptionsPage(BasePage):
 	DIST_MODES = [
 		("Walking distance (meters)",   True,  "dist_walking"),
 		("Axial/segment lines (steps)", False, "dist_steps"),
-		("Angle (degrees)",             False, "dist_angular"),
 		("Axialmeter (steps*meters)",   False, "dist_axmeter"),
 	]
 	NORM_MODES = [
 		("No Normalization",             True,  "norm_none"),
-		("Normalization (Turner 2007)",  False, "norm_normalization"),
 		("Standard normalization (0-1)", False, "norm_standard"),
-		("Syntax normalization (NACH)",  False, "norm_syntax"),
 	]
 	WEIGHT_MODES = [
 		("No weight",               True,  "weight_none"),

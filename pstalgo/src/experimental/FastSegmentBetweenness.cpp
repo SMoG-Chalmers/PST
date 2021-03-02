@@ -60,7 +60,7 @@ namespace psta
 
 		struct SNodeData 
 		{
-			// No node data
+			float m_Weight;
 		};
 
 		struct SEdgeData
@@ -79,7 +79,7 @@ namespace psta
 
 	typedef TSparseDirectedGraph<SNodeData, SEdgeData> CSegmentBetweennessGraph;
 
-	CSegmentBetweennessGraph CreateSegmentBetweennessGraph(const CSegmentGraph& seg_graph)
+	CSegmentBetweennessGraph CreateSegmentBetweennessGraph(const CSegmentGraph& seg_graph, bool weigh_by_segment_length)
 	{
 		CSegmentBetweennessGraph graph;
 
@@ -90,7 +90,8 @@ namespace psta
 			for (auto* intersection : seg_graph.GetSegment(i).m_Intersections)
 			{
 				const unsigned int edge_count = intersection ? intersection->m_NumSegments - 1 : 0;
-				graph.NewNode(edge_count);
+				const CSegmentBetweennessGraph::HNode node_handle = graph.NewNode(edge_count);
+				graph.Node(node_handle).m_Weight = weigh_by_segment_length ? seg_graph.GetSegment(i).m_Length : 1.0f;
 			}
 		}
 
@@ -139,7 +140,13 @@ namespace psta
 	class CSegmentBetweennessWorkerContext
 	{
 	public:
-		CSegmentBetweennessWorkerContext(unsigned int segment_count, IProgressCallback& progress_callback) : m_ProgressCallback(progress_callback), m_SegmentIndex(0), m_SegmentCount(segment_count) {}
+		CSegmentBetweennessWorkerContext(unsigned int segment_count, unsigned int* out_node_count, float* out_total_depth, IProgressCallback& progress_callback) 
+			: m_ProgressCallback(progress_callback)
+			, m_SegmentIndex(0)
+			, m_SegmentCount(segment_count)
+			, m_OutNodeCount(out_node_count)
+			, m_OutTotalDepth(out_total_depth)
+		{}
 
 		// Called by workers to get next node to process
 		bool DequeueSegment(unsigned int& ret_segment_index)
@@ -151,10 +158,19 @@ namespace psta
 			return !m_ProgressCallback.GetCancel();
 		}
 
+		void ReportNodeCountAndTotalDepth(unsigned int segment_index, unsigned int node_count, float total_depth) {
+			if (m_OutNodeCount)
+				m_OutNodeCount[segment_index] = node_count;
+			if (m_OutTotalDepth)
+				m_OutTotalDepth[segment_index] = total_depth;
+		}
+
 	private:
 		IProgressCallback& m_ProgressCallback;
 		std::atomic<unsigned int> m_SegmentIndex;
 		unsigned int m_SegmentCount;
+		unsigned int* m_OutNodeCount;
+		float*        m_OutTotalDepth;
 	};
 
 	class CSegmentBetweennessWorker
@@ -195,16 +211,22 @@ namespace psta
 				m_PredecessorListHead = -1;
 			}
 
+			inline bool Visited() const
+			{
+				return m_ShortestDistance != std::numeric_limits<float>::infinity();
+			}
+
 			float m_ShortestDistance;
 			float m_Accumulator;
 			unsigned int m_PredecessorListHead;
+			float m_CachedNodeWeight;  // Stored here to avoid having to look up in graph (1.0 if non-weight-mode)
 		};
 
 		template <class TLambda> void ForEachPredecessor(const SNodeState& node_data, TLambda&& lambda) const;
 		unsigned int PredecessorCount(const SNodeState& node_data) const;
 		void AddPredecessor(SNodeState& node_data, graph_t::HNode pred);
 
-		void ProcessSegment(const graph_t& graph, graph_t::index_t origin_segment_index);
+		void ProcessSegment(const graph_t& graph, graph_t::index_t origin_segment_index, unsigned int& out_node_count, float& out_total_depth);
 
 		enum EPerfCounters
 		{
@@ -252,8 +274,12 @@ namespace psta
 		m_Predecessors.reserve(node_count / 4);  // Guess
 
 		unsigned int segment_index;
-		while (ctx.DequeueSegment(segment_index))
-			ProcessSegment(graph, segment_index);
+		while (ctx.DequeueSegment(segment_index)) {
+			unsigned int node_count;
+			float total_depth;
+			ProcessSegment(graph, segment_index, node_count, total_depth);
+			ctx.ReportNodeCountAndTotalDepth(segment_index, node_count, total_depth);
+		}
 	}
 
 	void CSegmentBetweennessWorker::LogPerfCounters() const
@@ -322,7 +348,7 @@ namespace psta
 		node_data.m_PredecessorListHead = ((unsigned int)m_Predecessors.size() - 1) | 0x80000000;
 	}
 
-	void CSegmentBetweennessWorker::ProcessSegment(const graph_t& graph, graph_t::index_t origin_segment_index)
+	void CSegmentBetweennessWorker::ProcessSegment(const graph_t& graph, graph_t::index_t origin_segment_index, unsigned int& out_node_count, float& out_total_depth)
 	{
 		m_Predecessors.clear();
 
@@ -341,10 +367,16 @@ namespace psta
 		qe.m_NodeHandle = graph.NodeHandleFromIndex(qe.m_NodeIndex);
 		m_Queue.push(qe);
 
+		// Weight of origin node (same in both directions of course)
+		const float origin_weight = graph.Node(qe.m_NodeHandle).m_Weight;
+
 		#ifdef PERF_ENABLED
 			CPerfTimer perf_timer;
 			perf_timer.Start();
 		#endif
+
+		unsigned int visited_segment_count = 1;  // Including self
+		double total_depth = 0;
 
 		while (!m_Queue.empty())
 		{
@@ -366,6 +398,7 @@ namespace psta
 
 				// First time this node is reached
 				state.m_ShortestDistance = qe.m_PrimaryDistance;
+				state.m_CachedNodeWeight = node.m_Weight;
 				m_VisitedNodesStack.push_back(node.Index());
 
 				// Process edges
@@ -426,14 +459,35 @@ namespace psta
 			if (segment_index != origin_segment_index)
 			{
 				// NOTE: We only add half the score because the algorithm counts each path twice - once for each direction.
-				m_Scores[segment_index] += state.m_Accumulator * .5f;
+				m_Scores[segment_index] += origin_weight * state.m_Accumulator * .5f;
 
 				const auto opposite_node_index = node_index ^ 1;
 				const auto& opposite_state = m_NodeStates[opposite_node_index];
 
+				// Update visited segment count
+				// NOTE: States are resetted as they are being processed here, so we 
+				//       make sure a segment is counted only once by counting only on
+				//       the last remaining direction it has been visited on.
+				if (!opposite_state.Visited()) {  
+					++visited_segment_count;
+				}
+
+				// Update total depth
+				if (!opposite_state.Visited()) {
+					// This segment was only traversed in this direction, so this is the shortest distance to it
+					total_depth += state.m_ShortestDistance;
+				} else if (state.m_ShortestDistance < opposite_state.m_ShortestDistance) {
+					// This segment was traversed in BOTH directions, and this current direction was the shortest.
+					// Since this direction state will be reset before the opposita state is processed, the opposite
+					// state will think it was the only state, and will therefore add its m_ShortestDistance-value, 
+					// so we have to subtract it here to cancel out that operation.
+					total_depth += state.m_ShortestDistance;
+					total_depth -= opposite_state.m_ShortestDistance;
+				}
+
 				float score_to_pass_on = state.m_Accumulator;
 				if (state.m_ShortestDistance < opposite_state.m_ShortestDistance)
-					score_to_pass_on += 1.f;
+					score_to_pass_on += state.m_CachedNodeWeight;
 
 				const auto predecessor_count = PredecessorCount(state);
 				if (predecessor_count)
@@ -450,12 +504,17 @@ namespace psta
 			state.Reset();
 		}
 
+		out_node_count = visited_segment_count;
+		out_total_depth = SyntaxAngleWeightFromDegrees(total_depth);  // NOTE: Assuming distance mode is ANGULAR
+
 		#ifdef PERF_ENABLED
 			m_PerfCounters[EPerfCounter_CollectTicks] += perf_timer.ReadAndRestart();
 		#endif
 	}
 
-	void Apa(const CSegmentGraph& seg_graph, const SPSTARadii& radii, float* out_scores, IProgressCallback& progress_callback)
+	
+
+	void DoFastSegmentBetweenness(const CSegmentGraph& seg_graph, const SPSTARadii& radii, bool weigh_by_segment_length, float* out_scores, unsigned int* out_node_count, float* out_total_depth, IProgressCallback& progress_callback)
 	{
 		#ifdef PERF_ENABLED
 				CPerfTimer perf_timer;
@@ -468,12 +527,17 @@ namespace psta
 			static const auto WORKER_COUNT = 1;
 		#endif
 
-		const auto graph = psta::CreateSegmentBetweennessGraph(seg_graph);
+		const auto graph = psta::CreateSegmentBetweennessGraph(seg_graph, weigh_by_segment_length);
 
 		std::vector<std::future<void>> tasks;
 		tasks.reserve(WORKER_COUNT);
 
-		CSegmentBetweennessWorkerContext ctx(seg_graph.GetSegmentCount(), progress_callback);
+		if (out_node_count)
+			memset(out_node_count, 0, sizeof(*out_node_count) * seg_graph.GetSegmentCount());
+		if (out_total_depth)
+			memset(out_total_depth, 0, sizeof(*out_total_depth) * seg_graph.GetSegmentCount());
+
+		CSegmentBetweennessWorkerContext ctx(seg_graph.GetSegmentCount(), out_node_count, out_total_depth, progress_callback);
 
 		std::vector<std::unique_ptr<CSegmentBetweennessWorker>> workers(WORKER_COUNT);
 		for (size_t i = 0; i < WORKER_COUNT; ++i)
@@ -510,11 +574,24 @@ namespace psta
 
 PSTADllExport bool PSTAFastSegmentBetweenness(const SPSTAFastSegmentBetweennessDesc* desc)
 {
-	auto& seg_graph = *(const CSegmentGraph*)desc->m_Graph;
+	try {
+		if (desc->VERSION != desc->m_Version) {
+			throw std::exception("Version mismatch");
+		}
+		 
+		auto& seg_graph = *(const CSegmentGraph*)desc->m_Graph;
 
-	CPSTAlgoProgressCallback progress(desc->m_ProgressCallback, desc->m_ProgressCallbackUser);
+		CPSTAlgoProgressCallback progress(desc->m_ProgressCallback, desc->m_ProgressCallbackUser);
 
-	psta::Apa(seg_graph, desc->m_Radius, desc->m_OutBetweenness, progress);
-
-	return true;
+		psta::DoFastSegmentBetweenness(seg_graph, desc->m_Radius, desc->m_WeighByLength, desc->m_OutBetweenness, desc->m_OutNodeCount, desc->m_OutTotalDepth, progress);
+		
+		return true;
+	}
+	catch (const std::exception& e) {
+		LOG_ERROR(e.what());
+	}
+	catch (...) {
+		LOG_ERROR("Unknown exception");
+	}
+	return false;
 }
