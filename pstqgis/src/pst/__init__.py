@@ -30,7 +30,7 @@ def MetaData():
 		my_dir = os.path.dirname(os.path.abspath(__file__))
 		metadata_path = os.path.join(my_dir, 'metadata.txt')
 		metadata = configparser.ConfigParser()
-		metadata.read(metadata_path)
+		metadata.read(metadata_path, encoding='utf8')
 	return metadata
 
 APP_TITLE = MetaData()['general']['name']
