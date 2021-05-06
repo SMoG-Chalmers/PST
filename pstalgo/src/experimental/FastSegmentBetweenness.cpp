@@ -85,13 +85,24 @@ namespace psta
 
 		// Allocate nodes
 		graph.ReserveNodeCount(seg_graph.GetSegmentCount() * 2);
-		for (unsigned int i = 0; i < seg_graph.GetSegmentCount(); ++i)
+		for (unsigned int segment_index = 0; segment_index < seg_graph.GetSegmentCount(); ++segment_index)
 		{
-			for (auto* intersection : seg_graph.GetSegment(i).m_Intersections)
+			auto& segment = seg_graph.GetSegment(segment_index);
+			for (auto* intersection : segment.m_Intersections)
 			{
-				const unsigned int edge_count = intersection ? intersection->m_NumSegments - 1 : 0;
+				// Count valid edges (not leading back to itself)
+				unsigned int edge_count = 0;
+				if (intersection)
+				{
+					for (unsigned int i = 0; i < intersection->m_NumSegments; ++i)
+					{
+						const auto dst_segment_index = intersection->m_Segments[i];
+						edge_count += (dst_segment_index == segment_index) ? 0 : 1;
+					}
+				}
+				// Create node
 				const CSegmentBetweennessGraph::HNode node_handle = graph.NewNode(edge_count);
-				graph.Node(node_handle).m_Weight = weigh_by_segment_length ? seg_graph.GetSegment(i).m_Length : 1.0f;
+				graph.Node(node_handle).m_Weight = weigh_by_segment_length ? segment.m_Length : 1.0f;
 			}
 		}
 
@@ -105,18 +116,20 @@ namespace psta
 				auto& node = graph.Node(graph.NodeHandleFromIndex(node_index));
 				//node.m_OppositeNode = node_handles[node_index ^ 0x00000001];
 
+				unsigned int edge_index = 0;
+
 				if (intersection)
 				{
 					const bool src_forwards = (intersection == segment.m_Intersections[1]);
-					unsigned int edge_index = 0;
 					for (unsigned int i = 0; i < intersection->m_NumSegments; ++i)
 					{
 						const auto dst_segment_index = intersection->m_Segments[i];
 						if (dst_segment_index == segment_index)
-							continue;
+							continue;  // Discard the ones that lead back to itself
 						auto& dst_segment = seg_graph.GetSegment(dst_segment_index);
 						const bool dst_forwards = (dst_segment.m_Intersections[0] == intersection);
 						unsigned int dst_node_index = (dst_segment_index * 2) + (dst_forwards ? 1 : 0);
+						ASSERT(edge_index < node.EdgeCount());
 						auto& edge = node.Edge(edge_index++);
 						edge.SetTarget(graph.NodeHandleFromIndex(dst_node_index), dst_node_index);
 						const auto src_orientation = src_forwards ? segment.m_Orientation : reverseAngle(segment.m_Orientation);
@@ -130,6 +143,9 @@ namespace psta
 						edge.m_RadiusDist = (segment.m_Length + dst_segment.m_Length) * .5f;
 					}
 				}
+
+				ASSERT(node.EdgeCount() == edge_index);
+
 				++node_index;
 			}
 		}
@@ -513,6 +529,23 @@ namespace psta
 	}
 
 	
+	void DumpSegmentBetweennessGraph(const CSegmentBetweennessGraph& graph, const char* path)
+	{
+		FILE* f = fopen(path, "w");
+		fprintf(f, "Node count: %u\n", graph.NodeCount());
+		for (unsigned int node_index = 0; node_index < graph.NodeCount(); ++node_index)
+		{
+			const auto node_handle = graph.NodeHandleFromIndex(node_index);
+			const auto& node = graph.Node(node_handle);
+			fprintf(f, "Node %.6u: handle=%.8x, index=%.6u, edges=%u\n", node_index, node_handle, node.Index(), node.EdgeCount());
+			for (unsigned int edge_index = 0; edge_index < node.EdgeCount(); edge_index++)
+			{
+				const auto& edge = node.Edge(edge_index);
+				fprintf(f, "  Edge %d: TargetHandle=%.8x, TargetIndex=%.6u, m_PrimaryDist=%u, m_RadiusDist=%u\n", edge_index, edge.TargetHandle(), edge.TargetIndex(), edge.m_PrimaryDist, edge.m_RadiusDist);
+			}
+		}
+		fclose(f);
+	}
 
 	void DoFastSegmentBetweenness(const CSegmentGraph& seg_graph, const SPSTARadii& radii, bool weigh_by_segment_length, float* out_scores, unsigned int* out_node_count, float* out_total_depth, IProgressCallback& progress_callback)
 	{
