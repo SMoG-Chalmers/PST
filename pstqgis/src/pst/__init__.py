@@ -29,8 +29,9 @@ def MetaData():
 		import os, configparser
 		my_dir = os.path.dirname(os.path.abspath(__file__))
 		metadata_path = os.path.join(my_dir, 'metadata.txt')
+		metadata_contents = open(metadata_path, encoding="utf-8").read()
 		metadata = configparser.ConfigParser()
-		metadata.read(metadata_path)
+		metadata.read_string(metadata_contents)
 	return metadata
 
 APP_TITLE = MetaData()['general']['name']
