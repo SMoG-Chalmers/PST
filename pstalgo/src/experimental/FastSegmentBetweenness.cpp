@@ -609,7 +609,7 @@ PSTADllExport bool PSTAFastSegmentBetweenness(const SPSTAFastSegmentBetweennessD
 {
 	try {
 		if (desc->VERSION != desc->m_Version) {
-			throw std::exception("Version mismatch");
+			throw std::runtime_error("Version mismatch");
 		}
 		 
 		auto& seg_graph = *(const CSegmentGraph*)desc->m_Graph;

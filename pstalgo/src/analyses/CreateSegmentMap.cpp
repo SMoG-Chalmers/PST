@@ -186,7 +186,7 @@ public:
 			if (desc.m_UnlinkCount)
 			{
 				if (EPSTARoadNetworkType_AxialOrSegment != desc.m_RoadNetworkType) {
-					throw std::exception("Unlinks are only allowed for axial/segment road networks");
+					throw std::runtime_error("Unlinks are only allowed for axial/segment road networks");
 				}
 				progress.SetCurrentTask(ETask_Unlinks);
 				std::vector<float2> unlinks;
@@ -826,7 +826,7 @@ PSTADllExport IPSTAlgo* PSTACreateSegmentMap(const SCreateSegmentMapDesc* desc, 
 	try {
 		if ((desc->VERSION != desc->m_Version) ||
 			(res->VERSION != res->m_Version)) {
-			throw std::exception("Version mismatch");
+			throw std::runtime_error("Version mismatch");
 		}
 
 		auto algo = std::unique_ptr<CCreateSegmentMap>(new CCreateSegmentMap);
