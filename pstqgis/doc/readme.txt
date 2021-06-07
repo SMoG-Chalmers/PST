@@ -49,3 +49,15 @@ Enabling the plugin:
       list make sure the installation above was done correctly).
 
    5. PST will now appear in the 'Vector' menu.
+
+on Mac:
+
+   6. When you run the plugin for the first time you get the warning '"libpstalgo.dylib" cannot be opened because the developer cannot be verified'.
+
+   7. On your Mac, choose Apple menu  > System Preferences, click Security & Privacy, then click General. If the lock at the bottom left is locked, click it to unlock the preference pane.
+
+   8. Select the sources from which you’ll allow software to be installed: App Store and identified developers.
+
+   9. For the warning ‘“libpstalgo.dylib”’ was blocked from use because it is not from an identified developer’ click ‘Allow anyway’.
+
+   10. Restart QGIS.
