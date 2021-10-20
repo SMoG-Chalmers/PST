@@ -141,7 +141,7 @@ void SphereTree::CreateSubTree(int currNode, int nLevels)
 
 	for (i=0; i<4; i++) {
 		nodes[currNode].children[i] = nNodes+i;
-		nodes[nNodes+i].rad = nodes[currNode].rad / 2.0f;
+		nodes[nNodes+i].rad = nodes[currNode].rad / 1.99f;  // 1.99 instead of 2.0 here to fight numerical precision, by having circles overlap slightly at corners
 	}
 
 	REAL d = nodes[currNode].rad * 0.7071068f / 2.0f;
