@@ -80,8 +80,11 @@ class TaskSplitProgressDelegate(object):
 		self._delegate.setStatus(self._getText() + " (%s)" % text)
 
 	def setProgress(self, progress):
-		scaled_progress = float(self._currIndex + progress) / self._count
-		#print("%d + %f / %d = %f"%(self._currIndex, progress, self._count, scaled_progress))
+		if self._count > 0:
+			scaled_progress = float(self._currIndex + progress) / self._count
+			#print("%d + %f / %d = %f"%(self._currIndex, progress, self._count, scaled_progress))
+		else:
+			scaled_progress = 1
 		self._delegate.setProgress(scaled_progress)
 
 	def getCancel(self):
