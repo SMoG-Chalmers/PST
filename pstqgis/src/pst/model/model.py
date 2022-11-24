@@ -223,7 +223,14 @@ class QGISModel(object):
 		for feature_index, feature in enumerate(layer.getFeatures()):
 			g = feature.geometry()
 			if g and g.type() == QgsWkbTypes.LineGeometry:
-				poly = g.asPolyline()
+				poly = None
+				if g.isMultipart():
+					multiPolyline = g.asMultiPolyline()
+					if len(multiPolyline) != 1:
+						raise Exception("Table '%s' contains multi-polyline geometry, which is not supported." % (table_name)) 
+					poly = multiPolyline[0]
+				else:
+					poly = g.asPolyline()
 				if len(poly) == 2:
 					out_coords.append(poly[0].x())
 					out_coords.append(poly[0].y())
@@ -231,6 +238,8 @@ class QGISModel(object):
 					out_coords.append(poly[1].y())
 					if out_rowids is not None:
 						out_rowids.append(feature.id())
+				elif len(poly) > 2:
+					raise Exception("Table '%s' contains polyline geometry, which is not supported." % (table_name)) 
 			if progress is not None and feature_index % 1000 == 0:
 				progress.setProgress(float(feature_index) / num_features)
 		if progress is not None:
@@ -242,15 +251,23 @@ class QGISModel(object):
 		polys = array.array('i')
 		num_features = layer.featureCount()
 		for feature_index, feature in enumerate(layer.getFeatures()):
-			geom = feature.geometry()
-			if geom is None:
+			g = feature.geometry()
+			if g is None:
 				continue  # Seems strange that a feature could be without geometry, but this was encountered once
-			if geom.type() == QgsWkbTypes.LineGeometry:
-				poly = geom.asPolyline()
-				for c in poly:
-					coords.append(c.x())
-					coords.append(c.y())
-				polys.append(len(poly))
+			if g.type() == QgsWkbTypes.LineGeometry:
+				if g.isMultipart():
+					multiPolyline = g.asMultiPolyline()
+					for poly in multiPolyline:
+						for c in poly:
+							coords.append(c.x())
+							coords.append(c.y())
+						polys.append(len(poly))
+				else:
+					poly = g.asPolyline()
+					for c in poly:
+						coords.append(c.x())
+						coords.append(c.y())
+					polys.append(len(poly))
 			if progress is not None and feature_index % 1000 == 0:
 				progress.setProgress(float(feature_index) / num_features)
 		if progress is not None:
