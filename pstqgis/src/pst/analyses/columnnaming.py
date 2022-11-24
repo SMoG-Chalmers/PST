@@ -26,9 +26,9 @@ from builtins import object
 class ColName(object):
 	# Analyses
 	REACH                     = "R"
-	NETWORK_INTEGRATION       = "NI"
+	NETWORK_INTEGRATION       = "I"
 	ANGULAR_INTEGRATION       = "AI"
-	NETWORK_BETWEENNESS       = "NB"
+	NETWORK_BETWEENNESS       = "B"
 	ANGULAR_CHOICE            = "AC"
 	ANGULAR_BETWEENNESS       = "AB"
 	ATTRACTION_DISTANCE       = "AD"
@@ -45,7 +45,7 @@ class ColName(object):
 	DIST_AXMETER  = "am"
 
 	# Radius
-	RADIUS_STRAIGHT = "sl%s"
+	RADIUS_STRAIGHT = "l%s"
 	RADIUS_WALKING  = "w%s"
 	RADIUS_STEPS    = "s%s"
 	RADIUS_ANGULAR  = "a%s"
@@ -62,41 +62,41 @@ class ColName(object):
 
 	# Normalization
 	NORM_NONE          = None
-	NORM_SYNTAX_NAIN   = "NAIN"
-	NORM_SYNTAX_NACH   = "NACH"
-	NORM_HILLIER       = "h"
-	NORM_TURNER        = "nT"
-	NORM_STANDARD      = "nS"
+	NORM_SYNTAX_NAIN   = "A"
+	NORM_SYNTAX_NACH   = "C"
+	NORM_HILLIER       = "H"
+	NORM_TURNER        = "T"
+	NORM_STANDARD      = "S"
 
 	# Extra
 	EXTRA_NODE_COUNT       = "N"
-	EXTRA_TOTAL_DEPTH      = "TD"
-	EXTRA_MEAN_DEPTH       = "MD"
+	EXTRA_TOTAL_DEPTH      = "T"
+	EXTRA_MEAN_DEPTH       = "M"
 	EXTRA_LENGTH           = "L"
-	EXTRA_AREA_CONVEX_HULL = "acv"
+	EXTRA_AREA_CONVEX_HULL = "a"
 
 	# Unit
 	UNIT_SQUARE_METER     = "m"
-	UNIT_SQUARE_KILOMETER = "km"
+	UNIT_SQUARE_KILOMETER = "k"
 	UNIT_HECTARE          = "ha"
 
 
 def GenColName(analysis, pst_distance_type=None, radii=None, decay=None, weight=None, normalization=None, extra=None, unit=None):
 	name = analysis
 	if pst_distance_type is not None:
-		name += '_' + PSTADistanceTypeToString(pst_distance_type)
+		name += PSTADistanceTypeToString(pst_distance_type)
 	if radii is not None:
-		name += '_' + RadiiToString(radii)
+		name += RadiiToString(radii)
 	if decay is not None:
-		name += '_' + decay
+		name += decay
 	if weight is not None:
-		name += '_' + weight
+		name += weight
 	if normalization is not None:
-		name += '_' + normalization
+		name += normalization
 	if extra is not None:
-		name += '_' + extra
+		name += extra
 	if unit is not None:
-		name += '_' + unit
+		name += unit
 	return name
 
 def FormatInteger(value):

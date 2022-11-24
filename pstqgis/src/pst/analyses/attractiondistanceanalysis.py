@@ -174,11 +174,20 @@ class AttractionDistanceAnalysis(BaseAnalysis):
 		delegate.setProgress(1)
 
 def GenerateAttractionDataName(table_name, column_name, custom_name):
+	name = custom_name if custom_name else column_name
+	if not name:
+		return ""
+	name = name.lower()
+	if len(name) > 2:
+		name = name[:2]
+	return name
+	""" Old naming logic
 	if table_name and len(table_name) > 4:
 		table_name = table_name[:4]
 	if column_name and len(column_name) > 4:
 		column_name = column_name[:4]
 	return '_'.join([name for name in [table_name, column_name, custom_name] if name])
+	"""
 
 def OriginTypeFromProps(pstalgo, props):
 	origin_type_name = props['in_origin_type']

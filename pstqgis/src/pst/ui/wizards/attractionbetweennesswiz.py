@@ -23,6 +23,7 @@ from qgis.PyQt.QtWidgets import QGridLayout, QLabel, QLineEdit, QMessageBox, QRa
 from ..wizard import BaseWiz, BasePage, WizProp, WizPropFloat
 from ..pages import FinishPage, GraphInputPage, ProgressPage, RadiusPage, ReadyPage
 from ..widgets import PropertySheetWidget, TableDataSelectionWidget, WidgetEnableRadioButton
+from .attractiondistancewiz import ValidateNonCollidingAttractionDataOutputColumns, CUSTOM_COLUMN_NAME_CHAR_LIMIT
 
 class AttractionBetweennessWiz(BaseWiz):
 	def __init__(self, parent, settings, model, task_factory):
@@ -110,6 +111,7 @@ class WeightPage(BasePage):
 		vlayout = QVBoxLayout()
 		vlayout.addWidget(QLabel("Attraction name (for output column)"))
 		edit = QLineEdit()
+		edit.setMaxLength(CUSTOM_COLUMN_NAME_CHAR_LIMIT)  # Charcter count limit, to avoid column names being too long (limitation in table file format)
 		self.regProp("dest_name", WizProp(edit, ""))
 		vlayout.addWidget(edit)
 		vlayout.addStretch()
@@ -123,6 +125,8 @@ class WeightPage(BasePage):
 	def validatePage(self):
 		if self.wizard().prop("dest_data_enabled") and not self.wizard().prop("dest_data"):
 			QMessageBox.information(self, "Incomplete input", "Please select at least one data colum.")
-		else:
-			return True
-		return False
+			return False
+		if not ValidateNonCollidingAttractionDataOutputColumns(self, self.wizard().prop("dest_data_enabled"), self.wizard().prop("dest_data"), self.wizard().prop("dest_name")):
+			return False
+		return True
+

@@ -80,6 +80,7 @@ class CalcOptionsPage(BasePage):
 			return True
 		return False
 
+CUSTOM_COLUMN_NAME_CHAR_LIMIT = 2
 
 class DestinationPage(BasePage):
 	def __init__(self):
@@ -107,6 +108,7 @@ class DestinationPage(BasePage):
 		vlayout = QVBoxLayout()
 		vlayout.addWidget(QLabel("Destination name (for output column)"))
 		edit = QLineEdit()
+		edit.setMaxLength(CUSTOM_COLUMN_NAME_CHAR_LIMIT)  # Character count limit, to avoid column names being too long (limitation in table file format)
 		self.regProp("dest_name", WizProp(edit, ""))
 		vlayout.addWidget(edit)
 		vlayout.addStretch()
@@ -120,6 +122,22 @@ class DestinationPage(BasePage):
 	def validatePage(self):
 		if self.wizard().prop("dest_data_enabled") and not self.wizard().prop("dest_data"):
 			QMessageBox.information(self, "Incomplete input", "Please select at least one data colum.")
-		else:
-			return True
+			return False
+		if not ValidateNonCollidingAttractionDataOutputColumns(self, self.wizard().prop("dest_data_enabled"), self.wizard().prop("dest_data"), self.wizard().prop("dest_name")):
+			return False
+		return True
+
+def ValidateNonCollidingAttractionDataOutputColumns(parent, dest_data_enabled, dest_data_columns, custom_name):
+	if not dest_data_enabled or len(dest_data_columns) < 2:
+		return True
+	if custom_name:
+		QMessageBox.information(parent, "Column name collision", "When specifying a custom name only one data column can be selected, since output columns would otherwise get the same name.")
 		return False
+	prefixes = []
+	for name in dest_data_columns:
+		prefix = name[:CUSTOM_COLUMN_NAME_CHAR_LIMIT].lower()
+		if prefix in prefixes:
+			QMessageBox.information(parent, "Column name collision", "Selected data columns have same prefix '%s', which will cause generated output column names to collide." % (prefix))
+			return False
+		prefixes.append(prefix)
+	return True
