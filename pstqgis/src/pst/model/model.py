@@ -291,7 +291,14 @@ class QGISModel(object):
 		for feature_index, feature in enumerate(layer.getFeatures()):
 			g = feature.geometry()
 			if g.type() == QgsWkbTypes.PolygonGeometry:
-				rings = g.asPolygon()
+				if g.isMultipart():  # not QgsWkbTypes.isSingleType(g.wkbType()):
+					polygons = g.asMultiPolygon()
+					if len(polygons) != 1:
+						raise Exception("Multipolygon geometry is not supported.")
+					rings = polygons[0]
+				else:
+					rings = g.asPolygon()
+				#rings = g.asPolygon()
 				outer_ring = rings[0]  # First polyline is outer ring, the rest are inner rings (if any)
 				out_coord_counts.append(len(outer_ring))
 				for point in outer_ring:
