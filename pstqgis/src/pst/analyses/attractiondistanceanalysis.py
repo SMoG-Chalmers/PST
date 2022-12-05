@@ -174,9 +174,11 @@ class AttractionDistanceAnalysis(BaseAnalysis):
 		delegate.setProgress(1)
 
 def GenerateAttractionDataName(table_name, column_name, custom_name):
-	name = custom_name if custom_name else column_name
+	name = custom_name
 	if not name:
-		return ""
+		name = column_name
+	if not name:
+		name = table_name
 	name = name.lower()
 	if len(name) > 2:
 		name = name[:2]
