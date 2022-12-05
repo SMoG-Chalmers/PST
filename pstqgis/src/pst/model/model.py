@@ -87,8 +87,18 @@ class QGISModel(object):
 		layer = self._layerFromName(table)
 		field = layer.fields()[self._safeFieldIndex(layer, column)]
 		field_type = field.type()
+		# Type strings from https://api.qgis.org/api/classQgsVectorLayer.html (section "Memory data providerType (memory)")
+		# Allowed type strings are "integer", "double" and "string".
 		if QVariant.Int == field_type:
 			return "integer"
+		elif QVariant.UInt == field_type:
+			return "integer"  # Isn't there a better one?
+		elif QVariant.LongLong == field_type:
+			return "integer"  # Isn't there a better one?
+		elif QVariant.ULongLong == field_type:
+			return "integer"  # Isn't there a better one?
+		elif QVariant.Double == field_type:
+			return "double"
 		elif QVariant.String == field_type:
 			return "string(%d)" % field.length()
 		return None
