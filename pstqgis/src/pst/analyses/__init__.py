@@ -28,6 +28,7 @@ from .attractionreachanalysis import AttractionReachAnalysis
 from .base import AnalysisException
 from .createsegmentmapanalysis import CreateSegmentMapAnalysis
 from .createjunctionsanalysis import CreateJunctionsAnalysis
+from .isovistanalysis import IsovistAnalysis
 from .networkbetweennessanalysis import NetworkBetweennessAnalysis
 from .networkintegrationanalysis import NetworkIntegrationAnalysis
 from .odbetweennessanalysis import ODBetweennessAnalysis

@@ -26,7 +26,7 @@ from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QMessageBox
 from qgis.core import *
 from qgis.core import Qgis
-from .analyses import SplitPolylinesAnalysis, CreateSegmentMapAnalysis, CreateJunctionsAnalysis, ReachAnalysis, NetworkIntegrationAnalysis, AngularIntegrationAnalysis, NetworkBetweennessAnalysis, AngularChoiceAnalysis, AngularBetweennessAnalysis, AttractionDistanceAnalysis, AttractionReachAnalysis, AttractionBetweennessAnalysis
+from .analyses import SplitPolylinesAnalysis, CreateSegmentMapAnalysis, CreateJunctionsAnalysis, ReachAnalysis, NetworkIntegrationAnalysis, AngularIntegrationAnalysis, NetworkBetweennessAnalysis, AngularChoiceAnalysis, AngularBetweennessAnalysis, AttractionDistanceAnalysis, AttractionReachAnalysis, AttractionBetweennessAnalysis, IsovistAnalysis
 from .model import QGISModel, Settings
 from .ui import wizards
 from . import APP_TITLE
@@ -74,7 +74,7 @@ class PSTPlugin(object):
 			('Angular Choice',         lambda : self.onAnalysis(wizards.AngularChoiceWiz,         AngularChoiceAnalysis), None),
 			('Attraction Distance',    lambda : self.onAnalysis(wizards.AttractionDistanceWiz,    AttractionDistanceAnalysis), None),
 			('Attraction Reach',       lambda : self.onAnalysis(wizards.AttractionReachWiz,       AttractionReachAnalysis), None),
-			('Attraction Betweenness', lambda : self.onAnalysis(wizards.AttractionBetweennessWiz, AttractionBetweennessAnalysis), None)
+			('Attraction Betweenness', lambda : self.onAnalysis(wizards.AttractionBetweennessWiz, AttractionBetweennessAnalysis), None),
 		]
 
 		if ENABLE_EXPERIMENTAL_ANALYSES:
@@ -83,6 +83,8 @@ class PSTPlugin(object):
 				None,
 				('Segment Grouping',          lambda : self.onAnalysis(wizards.SegmentGroupingWiz,         SegmentGroupingAnalysis),         None),
 				('Segment Group Integration', lambda : self.onAnalysis(wizards.SegmentGroupIntegrationWiz, SegmentGroupIntegrationAnalysis), None),
+				None,
+				('Isovists',                  lambda : self.onAnalysis(wizards.IsovistWiz,                 IsovistAnalysis),                 None),
 			]
 
 		actions = []

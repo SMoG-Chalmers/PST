@@ -27,7 +27,7 @@ from qgis.PyQt.QtGui import QColor
 import array, math
 
 import qgis
-from qgis.core import Qgis, QgsWkbTypes, QgsPoint, QgsPointXY, QgsProject
+from qgis.core import Qgis, QgsWkbTypes, QgsPoint, QgsPointXY, QgsProject, QgsMapLayerType
 
 from qgis.core import *  # TODO: Remove
 
@@ -109,6 +109,11 @@ class QGISModel(object):
 	def createLine(self, x1, y1, x2, y2):
 		return QgsGeometry.fromPolyline([QgsPoint(x1, y1), QgsPoint(x2, y2)])
 
+	def createPolygonFromCoordinateElements(self, coordinate_elements, coordinate_count, first_index = 0):
+		""" coordinate_elements = [x0, y0, x1, y1, ...] """
+		points = [ QgsPointXY( coordinate_elements[first_index + i * 2], coordinate_elements[first_index + 1 + i * 2]) for i in range(coordinate_count) ]
+		return QgsGeometry.fromPolygonXY( [points] ) 
+
 	def createTable(self, name, crs, columns, geo_iter, row_count, progress, geo_type=GeometryType.LINE):
 		# Generate URI
 		uri = "%s?crs=%s" % (QGISGeometryTypeStringFromGeometryType(geo_type), crs)
@@ -149,6 +154,7 @@ class QGISModel(object):
 	def coordinateReferenceSystem(self, table_name):
 		return self._layerFromName(table_name).crs().authid()
 
+	# DEPRECATED: Use geometryType instead
 	def getFirstGeometryType(self, table_name):
 		layer = self._layerFromName(table_name)
 		for feature in layer.getFeatures():
@@ -163,6 +169,21 @@ class QGISModel(object):
 			if geo_type == QgsWkbTypes.PolygonGeometry:
 				return GeometryType.POLYGON
 			raise Exception("Unsupported geometry type (#%d)" % geo_type)
+		return None
+
+	def geometryType(self, table_name):
+		layer = self._layerFromName(table_name)
+		if layer.type() != QgsMapLayerType.VectorLayer:
+			return None
+		return self._geometryTypeFromQgsWkbTypes(layer.geometryType())
+	
+	def _geometryTypeFromQgsWkbTypes(self, geo_type):
+		if geo_type == QgsWkbTypes.PointGeometry:
+			return GeometryType.POINT
+		if geo_type == QgsWkbTypes.LineGeometry:
+			return GeometryType.LINE
+		if geo_type == QgsWkbTypes.PolygonGeometry:
+			return GeometryType.POLYGON
 		return None
 
 	def values(self, table_name, column_names, rowids=None):

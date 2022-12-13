@@ -27,6 +27,7 @@ from .attractiondistancewiz import AttractionDistanceWiz
 from .attractionreachwiz import AttractionReachWiz
 from .createsegmentmapwiz import CreateSegmentMapWiz
 from .createjunctionswiz import CreateJunctionsWiz
+from .isovistwiz import IsovistWiz
 from .networkbetweennesswiz import NetworkBetweennessWiz
 from .networkintegrationwiz import NetworkIntegrationWiz
 from .odbetweennesswiz import ODBetweennessWiz
