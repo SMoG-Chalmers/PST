@@ -35,6 +35,19 @@ bool TestAABBCircleOverlap(const float2& bb_half_size, const float2& circle_cent
 	return d.x*d.x + d.y*d.y <= circle_radius*circle_radius;
 }
 
+bool TestAABBCircleOverlap(const float2& bb_center, const float2& bb_half_size, const float2& circle_center, float radius)
+{
+	const float dx = fabs(circle_center.x - bb_center.x);
+	if (dx >= bb_half_size.x + radius)
+		return false;
+	const float dy = fabs(circle_center.y - bb_center.y);
+	if (dy >= bb_half_size.y + radius)
+		return false;
+	if (dx < bb_half_size.x || dy < bb_half_size.y)
+		return true;
+	return sqr(dx - bb_half_size.x) + sqr(dy - bb_half_size.y) < sqr(radius);
+}
+
 bool TestAABBProjectionOverlap(const CRectf& aabb, const float2& v, float range_min, float range_max)
 {
 	float bb_min, bb_max;

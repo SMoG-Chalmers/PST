@@ -21,20 +21,27 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
+#include <pstalgo/utils/Macros.h>
 #include <pstalgo/Vec2.h>
 
-template <typename T, typename TVec> struct TRect 
+template <typename T> struct TRect 
 {
 public:
 	TRect() {}
+	TRect(const TVec2<T>& _min, const TVec2<T>& _max)
+		: m_Min(_min), m_Max(_max) {}
 	TRect(T left, T top, T right, T bottom)
 	: m_Left(left), m_Top(top), m_Right(right), m_Bottom(bottom) {}
 
 public:
+	template <typename TOther>
+	inline explicit operator TRect<TOther>() const { return TRect<TOther>((TOther)m_Left, (TOther)m_Top, (TOther)m_Right, (TOther)m_Bottom); }
+
 	inline bool operator==(const TRect& other) const { return other.m_Left == m_Left && other.m_Top == m_Top &&other.m_Right == m_Right &&other.m_Bottom == m_Bottom; }
 	inline T Width() const { return m_Right - m_Left; }
 	inline T Height() const { return m_Bottom - m_Top; }
 	inline T MinSize() const { using namespace std; return min(Width(), Height()); }
+	inline TVec2<T> Center() const { return TVec2<T>(CenterX(), CenterY()); }
 	inline T CenterX() const { return (m_Left + m_Right) / 2; }
 	inline T CenterY() const { return (m_Top + m_Bottom) / 2; }
 	inline T Area() const { return Width() * Height(); }
@@ -49,7 +56,9 @@ public:
 	inline TRect Offsetted(T x, T y) const { return TRect(m_Left + x, m_Top + y, m_Right + x, m_Bottom + y); }
 	inline bool IsEmpty() const { return m_Right <= m_Left || m_Bottom <= m_Top; }
 	
-	inline static TRect BBFromPoints(const TVec* coords, unsigned int count)
+	inline TRect operator-(const TVec2<T>& rhs) const { return TRect(m_Min - rhs, m_Max - rhs); }
+
+	inline static TRect BBFromPoints(const TVec2<T>* coords, unsigned int count)
 	{
 		if (0 == count)
 			return EMPTY;
@@ -79,26 +88,39 @@ public:
 		return d;
 	}
 
-	T m_Left;
-	T m_Top;
-	T m_Right;
-	T m_Bottom;
+	ALLOW_NAMELESS_STRUCT_BEGIN
+	union
+	{
+		struct
+		{
+			T m_Left;
+			T m_Top;
+			T m_Right;
+			T m_Bottom;
+		};
+		struct
+		{
+			TVec2<T> m_Min;
+			TVec2<T> m_Max;
+		};
+	};
+	ALLOW_NAMELESS_STRUCT_END
 
 	static const TRect EMPTY;
 };
 
-template <typename T, typename TVec> const TRect<T, TVec> TRect<T, TVec>::EMPTY(0, 0, 0, 0);
+template <typename T> const TRect<T> TRect<T>::EMPTY(0, 0, 0, 0);
 
-typedef TRect<int, int2> CRecti;
-typedef TRect<float, float2> CRectf;
-typedef TRect<double, double2> CRectd;
+typedef TRect<int> CRecti;
+typedef TRect<float> CRectf;
+typedef TRect<double> CRectd;
 
 inline CRectf CRectfFromCRecti(const CRecti& rc)
 {
 	return CRectf((float)rc.m_Left, (float)rc.m_Top, (float)rc.m_Right, (float)rc.m_Bottom);
 }
 
-template<> inline void TRect<int,int2>::SetMax()
+template<> inline void TRect<int>::SetMax()
 {
 	m_Left = m_Top = 0x80000000;
 	m_Right = m_Bottom = 0x7FFFFFFF;

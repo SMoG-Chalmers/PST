@@ -21,7 +21,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 def IsRoughlyEqual(v0, v1, max_rel_diff=0.0001):
 	if 0 == v0: 
-		return 0 == v1
+		return abs(v1-v0) <= max_rel_diff
 	return abs((v1-v0)/v0) <= max_rel_diff
 
 def IsArrayRoughlyEqual(a0, a1, max_rel_diff=0.0001):

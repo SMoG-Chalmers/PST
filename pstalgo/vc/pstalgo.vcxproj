@@ -25,6 +25,7 @@
     <ClInclude Include="..\include\pstalgo\analyses\AttractionReach.h" />
     <ClInclude Include="..\include\pstalgo\analyses\Common.h" />
     <ClInclude Include="..\include\pstalgo\analyses\CreateGraph.h" />
+    <ClInclude Include="..\include\pstalgo\analyses\CalculateIsovists.h" />
     <ClInclude Include="..\include\pstalgo\analyses\CreateJunctions.h" />
     <ClInclude Include="..\include\pstalgo\analyses\CreateSegmentMap.h" />
     <ClInclude Include="..\include\pstalgo\analyses\NetworkIntegration.h" />
@@ -45,6 +46,7 @@
     <ClInclude Include="..\include\pstalgo\geometry\AABSPTree.h" />
     <ClInclude Include="..\include\pstalgo\geometry\ConvexHull.h" />
     <ClInclude Include="..\include\pstalgo\geometry\Geometry.h" />
+    <ClInclude Include="..\include\pstalgo\geometry\IsovistCalculator.h" />
     <ClInclude Include="..\include\pstalgo\geometry\Polygon.h" />
     <ClInclude Include="..\include\pstalgo\geometry\Rect.h" />
     <ClInclude Include="..\include\pstalgo\geometry\RegionPoints.h" />
@@ -66,6 +68,7 @@
     <ClInclude Include="..\include\pstalgo\utils\DiscretePrioQueue.h" />
     <ClInclude Include="..\include\pstalgo\utils\Macros.h" />
     <ClInclude Include="..\include\pstalgo\utils\Perf.h" />
+    <ClInclude Include="..\include\pstalgo\utils\RefHeap.h" />
     <ClInclude Include="..\include\pstalgo\utils\SimpleAlignedAllocator.h" />
     <ClInclude Include="..\include\pstalgo\Vec2.h" />
     <ClInclude Include="..\src\analyses\AngularChoiceAlgo.h" />
@@ -80,6 +83,7 @@
     <ClCompile Include="..\src\analyses\AngularIntegration.cpp" />
     <ClCompile Include="..\src\analyses\AttractionDistance.cpp" />
     <ClCompile Include="..\src\analyses\AttractionReach.cpp" />
+    <ClCompile Include="..\src\analyses\CalculateIsovists.cpp" />
     <ClCompile Include="..\src\analyses\Common.cpp" />
     <ClCompile Include="..\src\analyses\CreateGraph.cpp" />
     <ClCompile Include="..\src\analyses\CreateJunctions.cpp" />
@@ -99,6 +103,7 @@
     <ClCompile Include="..\src\geometry\AABSPTree.cpp" />
     <ClCompile Include="..\src\geometry\ConvexHull.cpp" />
     <ClCompile Include="..\src\geometry\Geometry.cpp" />
+    <ClCompile Include="..\src\geometry\IsovistCalculator.cpp" />
     <ClCompile Include="..\src\geometry\Polygon.cpp" />
     <ClCompile Include="..\src\geometry\RegionPoints.cpp" />
     <ClCompile Include="..\src\graph\AxialGraph.cpp" />

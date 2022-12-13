@@ -216,6 +216,15 @@
     <ClInclude Include="..\src\utils\SphereTree.h">
       <Filter>src\utils</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\pstalgo\geometry\IsovistCalculator.h">
+      <Filter>include\pstalgo\geometry</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\utils\RefHeap.h">
+      <Filter>include\pstalgo\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\analyses\CalculateIsovists.h">
+      <Filter>include\pstalgo\analyses</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\analyses\AngularChoice.cpp">
@@ -334,6 +343,12 @@
     </ClCompile>
     <ClCompile Include="..\src\utils\SphereTree.cpp">
       <Filter>src\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\geometry\IsovistCalculator.cpp">
+      <Filter>src\geometry</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\analyses\CalculateIsovists.cpp">
+      <Filter>src\analyses</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

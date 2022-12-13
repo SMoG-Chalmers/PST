@@ -19,10 +19,21 @@ You should have received a copy of the GNU Lesser General Public License
 along with PST. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <cmath>
 #include <pstalgo/maths.h>
 #include <pstalgo/geometry/Rect.h>
 
 bool TestAABBCircleOverlap(const float2& bb_half_size, const float2& circle_center, float circle_radius);
+
+bool TestAABBCircleOverlap(const float2& bb_center, const float2& bb_half_size, const float2& circle_center, float radius);
+
+template <class T>
+inline bool TestAABBFullyInsideCircle(const TVec2<T>& bb_center, const TVec2<T>& bb_half_size, const TVec2<T>& circle_center, T radius)
+{
+	const T x = std::abs(circle_center.x - bb_center.x) + bb_half_size.x;
+	const T y = std::abs(circle_center.y - bb_center.y) + bb_half_size.y;
+	return x * x + y * y <= radius * radius;
+}
 
 bool TestAABBOBBOverlap(const CRectf& aabb, const float2& center, const float2& half_size, const float2& orientation);
 

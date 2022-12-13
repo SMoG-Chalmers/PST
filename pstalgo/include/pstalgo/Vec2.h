@@ -23,16 +23,19 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 #include <cmath>
 
-template <typename T, typename TVec2>
-struct TVec2Base {
+template <typename T>
+struct TVec2 {
 
 public:
 	T x;
 	T y;
 
 public:
-	TVec2Base() {}
-	TVec2Base(T _x, T _y) : x(_x), y(_y) {}
+	TVec2() {}
+	TVec2(T _x, T _y) : x(_x), y(_y) {}
+
+	template <typename TOther>
+	inline explicit operator TVec2<TOther>() const { return TVec2<TOther>((TOther)x, (TOther)y); }
 
 public:
 	inline T getLength() const { return sqrt(getLengthSqr()); }
@@ -50,43 +53,19 @@ public:
 	inline TVec2  operator*(const T t)  const     { return TVec2(x * t, y * t); }
 	inline TVec2  operator/(const T t)  const     { return TVec2(x / t, y / t); }
 	inline void  operator+=(const TVec2& t)       { x += t.x; y += t.y; }
-	inline const TVec2Base& operator*=(T s)           { x *= s; y *= s; return *this; }
-	inline const TVec2Base& operator/=(T s)           { const auto s_inv = (T)1 / s; x *= s_inv; y *= s_inv; return *this; }
+	inline const TVec2& operator*=(T s)           { x *= s; y *= s; return *this; }
+	inline const TVec2& operator/=(T s)           { const auto s_inv = (T)1 / s; x *= s_inv; y *= s_inv; return *this; }
 	inline bool  operator==(const TVec2& v) const { return (x == v.x) && (y == v.y); }
 	inline bool  operator!=(const TVec2& v) const { return (x != v.x) || (y != v.y); }
 	inline bool  operator<(const TVec2& v)  const { return (x == v.x) ? (y < v.y) : (x < v.x); }
 };
 
-struct int2;
-struct float2;
-struct double2;
+typedef TVec2<int> int2;
+typedef TVec2<float> float2;
+typedef TVec2<double> double2;
 
-struct int2 : public TVec2Base < int, int2 >
-{
-	int2() {}
-	int2(int x, int y) : TVec2Base(x, y) {}
-};
+template <typename T>
+inline T dot(const TVec2<T>& a, const TVec2<T>& b) { return (a.x * b.x) + (a.y * b.y); }
 
-struct float2 : public TVec2Base < float, float2 >
-{
-	float2() {}
-	float2(float x, float y) : TVec2Base(x, y) {}
-	inline explicit operator double2() const;
-};
-
-struct double2 : public TVec2Base < double, double2 >
-{
-	double2() {}
-	double2(double x, double y) : TVec2Base(x, y) {}
-	inline explicit operator float2() const;
-};
-
-inline float2::operator double2() const { return double2((double)x, (double)y); }
-inline double2::operator float2() const { return float2((float)x, (float)y); }
-
-
-template <typename TVec2>
-inline auto dot(const TVec2& a, const TVec2& b) -> decltype(a.x) { return (a.x * b.x) + (a.y * b.y); }
-
-template <typename TVec2>
-inline auto crp(const TVec2& a, const TVec2& b) -> decltype(a.x) { return (a.x * b.y) - (a.y * b.x); }
+template <typename T>
+inline T crp(const TVec2<T>& a, const TVec2<T>& b) { return (a.x * b.y) - (a.y * b.x); }

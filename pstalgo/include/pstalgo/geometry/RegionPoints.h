@@ -22,9 +22,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 #pragma once
 
 #include <vector>
-
-struct float2;
-struct double2;
+#include <pstalgo/Vec2.h>
 
 size_t GeneratePointsAlongRegionEdge(const float2* points, unsigned int point_count, float interval, float2* buffer = nullptr, size_t max_count = 0);
 void GeneratePointsAlongRegionEdge(const float2* points, unsigned int point_count, float interval, std::vector<float2>& ret_points);
