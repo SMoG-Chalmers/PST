@@ -83,8 +83,8 @@ class PSTPlugin(object):
 				None,
 				('Segment Grouping',          lambda : self.onAnalysis(wizards.SegmentGroupingWiz,         SegmentGroupingAnalysis),         None),
 				('Segment Group Integration', lambda : self.onAnalysis(wizards.SegmentGroupIntegrationWiz, SegmentGroupIntegrationAnalysis), None),
-				None,
-				('Isovists',                  lambda : self.onAnalysis(wizards.IsovistWiz,                 IsovistAnalysis),                 None),
+				#None,
+				#('Isovists',                  lambda : self.onAnalysis(wizards.IsovistWiz,                 IsovistAnalysis),                 None),
 			]
 
 		actions = []
