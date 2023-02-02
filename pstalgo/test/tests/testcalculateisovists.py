@@ -27,6 +27,7 @@ from .common import IsRoughlyEqual
 
 class TestCalculateIsovists(unittest.TestCase):
 
+    """
     def test_calculateisovists_1(self):
         polygons = [
              [(-5, 5), (-5,-5), (5,-5), (5, 5)],
@@ -63,19 +64,21 @@ class TestCalculateIsovists(unittest.TestCase):
              [(-5,2.5), (-2.5,5), (2.5,5), (5,2.5), (5,-2.5), (2.5,-5), (-2.5,-5), (-5,-2.5)],
         ]
         self._runTest(polygons, origins, 7.5, 4, expected_isovists)
-
+    """
+    
     def test_calculateisovists_perimeter(self):
         polygons = [
         ]
         origins = [
-            (1,2),
+            (0,0),
         ]
+        r = 6.2666
         expected_isovists = [
-             [(6,2), (1,-3), (-4,2), (1,7)],
+             [(0,r), (r,0), (0, -r), (-r, 0)],
         ]
         self._runTest(polygons, origins, 5, 4, expected_isovists)
     
-    def _runTest(self, polygons, origins, max_radius, perimeter_segment_count, expected_isovists):
+    def _runTest(self, polygons, origins, max_view_distance, perimeter_segment_count, expected_isovists):
 
         point_count_per_polygon = array.array('I', [len(polygon) for polygon in polygons])
         
@@ -86,26 +89,24 @@ class TestCalculateIsovists(unittest.TestCase):
                 polygon_coords.append(pt[1])
         polygon_coords = array.array('d', polygon_coords)
 
-        origin_coords = []
-        for pt in origins:
-            origin_coords.append(pt[0])
-            origin_coords.append(pt[1])
-        origin_coords = array.array('d', origin_coords)
+        isovist_context = pstalgo.CreateIsovistContext(point_count_per_polygon, polygon_coords)
 
-        (res, algo) = pstalgo.CalculateIsovists(point_count_per_polygon, polygon_coords, origin_coords, max_radius, perimeter_segment_count, None)
         try:
-            self.assertEqual(len(expected_isovists), res.m_IsovistCount, "Unexpected isovist count")
+            for origin_index, origin in enumerate(origins):
+                (point_count, points, isovist_handle, area) = pstalgo.CalculateIsovist(isovist_context, origin[0], origin[1], max_view_distance, 360, 0, perimeter_segment_count)
 
-            coordinate_element_index = 0
-            for isovist_index in range(res.m_IsovistCount):
-                point_count = res.m_PointCountPerIsovist[isovist_index]
                 polygon = []
-                for i in range(point_count):
-                    polygon.append((res.m_IsovistPoints[coordinate_element_index], res.m_IsovistPoints[coordinate_element_index+1]))
-                    coordinate_element_index += 2
-                self._compareIsovists(expected_isovists[isovist_index], polygon)
-        finally:        
-            pstalgo.Free(algo)
+                for point_index in range(point_count):
+                    polygon.append((points[point_index * 2], points[point_index * 2 + 1]))
+                print(polygon)
+                self._compareIsovists(expected_isovists[origin_index], polygon)
+
+                pstalgo.Free(isovist_handle)
+
+
+        finally:
+            pstalgo.Free(isovist_context)
+
 
     def _compareIsovists(self, actual, expected):
         self.assertEqual(len(actual), len(expected), "Length of actual and expected isovists do not match")

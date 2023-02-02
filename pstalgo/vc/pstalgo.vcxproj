@@ -47,6 +47,8 @@
     <ClInclude Include="..\include\pstalgo\geometry\ConvexHull.h" />
     <ClInclude Include="..\include\pstalgo\geometry\Geometry.h" />
     <ClInclude Include="..\include\pstalgo\geometry\IsovistCalculator.h" />
+    <ClInclude Include="..\include\pstalgo\geometry\LooseBspTree.h" />
+    <ClInclude Include="..\include\pstalgo\geometry\Plane2D.h" />
     <ClInclude Include="..\include\pstalgo\geometry\Polygon.h" />
     <ClInclude Include="..\include\pstalgo\geometry\Rect.h" />
     <ClInclude Include="..\include\pstalgo\geometry\RegionPoints.h" />

@@ -22,6 +22,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 #pragma once
 
 #include <limits>
+#include <stdexcept>
 #include <pstalgo/pstalgo.h>
 
 enum EPSTANetworkElement
@@ -107,3 +108,12 @@ struct PSTADllExportClass SPSTARadii
 
 // Rescales to [0..1] range (1 if min = max)
 PSTADllExport void PSTAStandardNormalize(const float* in, unsigned int count, float* out);
+
+template <class T>
+inline void VerifyStructVersion(const T& s)
+{
+	if (T::VERSION != s.m_Version)
+	{
+		throw std::runtime_error("Version mismatch");
+	}
+}

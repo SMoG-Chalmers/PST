@@ -22,6 +22,9 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 import array, ctypes, os, sys
 from .vector import Vector
 
+DOUBLE_PTR = ctypes.POINTER(ctypes.c_uint)
+
+
 def DebugEnabled():
 	import os
 	return os.environ.get('PSTALGO_DEBUG') is not None

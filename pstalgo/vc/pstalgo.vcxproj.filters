@@ -225,6 +225,12 @@
     <ClInclude Include="..\include\pstalgo\analyses\CalculateIsovists.h">
       <Filter>include\pstalgo\analyses</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\pstalgo\geometry\LooseBspTree.h">
+      <Filter>include\pstalgo\geometry</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\geometry\Plane2D.h">
+      <Filter>include\pstalgo\geometry</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\analyses\AngularChoice.cpp">

@@ -21,6 +21,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 #include <algorithm>
 #include <pstalgo/geometry/IsovistCalculator.h>
+#include <pstalgo/geometry/Plane2D.h>
 #include <pstalgo/maths.h>
 
 
@@ -30,9 +31,17 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 static const float EPSILON = 0.0001f;
 
-inline static float AngleFromDirection(const float2& dir)
+inline static float AngleRadFromDirection(const float2& dir)
 {
 	return atan2f(dir.y, dir.x);
+}
+
+// Returns angle in range [0..2*PI)
+// Assumes a € [-2*PI..2*PI)
+template <typename T>
+inline static T GetPositiveAngleRad(T a)
+{
+	return a + ((T)PI * 2) * (a < 0);
 }
 
 CIsovistCalculator::CIsovistCalculator()
@@ -40,7 +49,7 @@ CIsovistCalculator::CIsovistCalculator()
 {
 }
 
-void CIsovistCalculator::CalculateIsovist(const float2& origin, const std::pair<float2, float2>* edges, size_t edge_count, std::vector<float2>& ret_isovist)
+void CIsovistCalculator::CalculateIsovist(const float2& origin, float fov_deg, float direction_deg, const std::pair<float2, float2>* edges, size_t edge_count, std::vector<float2>& ret_isovist)
 {
 	std::vector<Edge> myedges;
 	myedges.reserve(edge_count);
@@ -52,6 +61,10 @@ void CIsovistCalculator::CalculateIsovist(const float2& origin, const std::pair<
 	m_HeapIndexFromEdgeIndex.clear();
 
 	m_EdgeHeap.clear();
+
+	const auto fov_rad = deg2rad(fov_deg);
+	const auto direction_rad = normalizeAngleRad(deg2rad(direction_deg));
+	const auto fov_min_rad = normalizeAngleRad(direction_rad - fov_rad * .5f);
 
 	for (size_t i = 0; i < edge_count; ++i)
 	{
@@ -66,8 +79,9 @@ void CIsovistCalculator::CalculateIsovist(const float2& origin, const std::pair<
 		{
 			continue;  // Not facing origin (assumes polygon is cartesian clockwise)
 		}
-		const auto a0 = AngleFromDirection(p0);
-		const auto a1 = AngleFromDirection(p1);
+		// a0,a1 € [0..2*PI)
+		const auto a0 = GetPositiveAngleRad(AngleRadFromDirection(p0) - fov_min_rad);
+		const auto a1 = GetPositiveAngleRad(AngleRadFromDirection(p1) - fov_min_rad);
 		if (a0 == a1)
 		{
 			continue;
@@ -80,13 +94,12 @@ void CIsovistCalculator::CalculateIsovist(const float2& origin, const std::pair<
 		{
 			continue;  // Origin is too close to edge
 		}
-		edge.p0_angle = a0;
 		edge.index = (uint32_t)m_Edges.size();
 		m_EdgeEndPoints.push_back(EdgeEndPoint(edge.index, a0, false));
 		m_EdgeEndPoints.push_back(EdgeEndPoint(edge.index, a1, true));
 		m_HeapIndexFromEdgeIndex.push_back((uint32_t)-1);
 		m_Edges.push_back(edge);
-		if (a0 > 0 && a1 < 0)
+		if (a0 > a1)
 		{
 			m_EdgeHeap.push(edge);
 		}
@@ -97,11 +110,27 @@ void CIsovistCalculator::CalculateIsovist(const float2& origin, const std::pair<
 	auto try_add_to_isovist = [&ret_isovist, origin](const float2& pt_local)
 	{
 		const auto pt_world = pt_local + origin;
-		if (ret_isovist.empty() || (pt_world - ret_isovist.back()).getLengthSqr() > 0.01f)
+		if (ret_isovist.empty() || (pt_world - ret_isovist.back()).getLengthSqr() > 0.001f)
 		{
 			ret_isovist.push_back(pt_world);
 		}
 	};
+
+	if (fov_deg < 360)
+	{
+		ret_isovist.push_back(origin);
+		if (!m_EdgeHeap.empty())
+		{
+			const auto& edge = m_EdgeHeap.top();
+
+			const auto vec_fov_min = directionVectorfromAngleRad(direction_rad - .5f * fov_rad + (float)PI * .5f);
+			const Plane2Df plane_fov_min = { vec_fov_min, 0 };
+			auto p0 = edge.p0;
+			auto p1 = edge.p1;
+			ClipLineSegment(p0, p1, plane_fov_min);
+			try_add_to_isovist(p0);
+		}
+	}
 
 	for (const auto& pt : m_EdgeEndPoints)
 	{
@@ -110,32 +139,38 @@ void CIsovistCalculator::CalculateIsovist(const float2& origin, const std::pair<
 			const auto edge_index = pt.EdgeIndex();
 			const auto heap_index = m_HeapIndexFromEdgeIndex[edge_index];
 			ASSERT(heap_index != (uint32_t)-1 && "Maybe edge is tangent to direction from origin and end point got added before start point?");
-			if (0 == heap_index)
-			{
-				const auto prev_p1 = m_EdgeHeap.top().p1;
-				try_add_to_isovist(prev_p1);
-				m_EdgeHeap.pop();
-				if (!m_EdgeHeap.empty())
-				{
-					const auto& next_edge = m_EdgeHeap.top();
-					if (next_edge.p0 != prev_p1)
-					{
-						// Find intersection of next edge and vector from origin towwards p1 of previous edge
-						const auto normal = next_edge.normal();
-						const auto dist_from_next_along_normal = dot(normal, prev_p1 - next_edge.p0);
-						const auto p1_normalized = prev_p1.normalized();
-						const auto p = prev_p1 - (p1_normalized * (dist_from_next_along_normal / dot(p1_normalized, normal)));
-						try_add_to_isovist(p);
-					}
-				}
-			}
-			else
+			if (0 != heap_index)
 			{
 				m_EdgeHeap.removeAt(heap_index);
+				continue;
+			}
+			if (pt.Angle >= fov_rad)
+			{
+				break;
+			}
+			const auto prev_p1 = m_EdgeHeap.top().p1;
+			try_add_to_isovist(prev_p1);
+			m_EdgeHeap.pop();
+			if (!m_EdgeHeap.empty())
+			{
+				const auto& next_edge = m_EdgeHeap.top();
+				if (next_edge.p0 != prev_p1)
+				{
+					// Find intersection of next edge and vector from origin towwards p1 of previous edge
+					const auto normal = next_edge.normal();
+					const auto dist_from_next_along_normal = dot(normal, prev_p1 - next_edge.p0);
+					const auto p1_normalized = prev_p1.normalized();
+					const auto p = prev_p1 - (p1_normalized * (dist_from_next_along_normal / dot(p1_normalized, normal)));
+					try_add_to_isovist(p);
+				}
 			}
 		}
 		else
 		{
+			if (pt.Angle >= fov_rad) 
+			{
+				break;
+			}
 			const auto& edge = m_Edges[pt.EdgeIndex()];
 			if (m_EdgeHeap.empty())
 			{
@@ -163,6 +198,17 @@ void CIsovistCalculator::CalculateIsovist(const float2& origin, const std::pair<
 			}
 		}
 
+	}
+
+	if (fov_deg < 360 && !m_EdgeHeap.empty())
+	{
+		const auto& edge = m_EdgeHeap.top();
+		const auto vec_fov_max = directionVectorfromAngleRad(direction_rad + .5f * fov_rad - .5f * (float)PI);
+		const Plane2Df plane_fov_min = { vec_fov_max, 0 };
+		auto p0 = edge.p0;
+		auto p1 = edge.p1;
+		ClipLineSegment(p0, p1, plane_fov_min);
+		try_add_to_isovist(p1);
 	}
 
 	m_EdgeHeap.clear();

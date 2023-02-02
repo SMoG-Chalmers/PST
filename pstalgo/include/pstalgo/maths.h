@@ -22,6 +22,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
+#include <algorithm>
 #include <cmath>
 #include "Vec2.h"
 
@@ -65,6 +66,41 @@ template <typename T>
 inline T log(T b, T v)
 {
 	return log(v) / log(b);
+}
+
+template <typename T>
+inline T clamp(T value, T low, T high)
+{
+	return std::max(low, std::min(value, high));
+}
+
+template <typename T>
+inline T deg2rad(T deg)
+{
+	return deg * ((T)PI / (T)180);
+}
+
+template <typename T>
+inline T rad2def(T deg)
+{
+	return deg * ((T)180 / (T)PI);
+}
+
+// Returns angle in range [-PI,PI)
+template <typename T>
+inline static T normalizeAngleRad(T angle_rad)
+{
+	angle_rad = fmod(angle_rad, (T)PI * 2);
+	angle_rad += (T)PI * 2 * (angle_rad < (T)PI);
+	angle_rad -= (T)PI * 2 * (angle_rad >= (T)PI);
+	return angle_rad;
+}
+
+// angleRad = 0     ==>  positive X-axis
+// angleRad = pi/2  ==>  potitivy Y-axis
+template <class T> inline TVec2<T> directionVectorfromAngleRad(T angleRad)
+{
+	return TVec2<T>(cos(angleRad), sin(angleRad));
 }
 
 template <typename TVec>

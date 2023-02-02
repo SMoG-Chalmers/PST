@@ -19,207 +19,414 @@ You should have received a copy of the GNU Lesser General Public License
 along with PST. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <cmath>
 #include <memory>
 #include <pstalgo/analyses/CalculateIsovists.h>
 #include <pstalgo/Debug.h>
+#include <pstalgo/utils/Perf.h>
 #include <pstalgo/geometry/Geometry.h>
 #include <pstalgo/geometry/IsovistCalculator.h>
+#include <pstalgo/geometry/LooseBspTree.h>
+#include <pstalgo/geometry/Plane2D.h>
+#include <pstalgo/geometry/Polygon.h>
 #include <pstalgo/geometry/Rect.h>
 #include <pstalgo/maths.h>
 
 #include "../ProgressUtil.h"
 
-static const float EPSILON = 0.001f;
-
-template <class TType>
-struct TPlane2D
-{
-	TVec2<TType> Normal;
-	TType T;
-};
-
-typedef TPlane2D<float> Plane2Df;
-
-template <class TType>
-bool ClipLineSegment(TVec2<TType>& p0, TVec2<TType>& p1, const TPlane2D<TType>& plane)
-{
-	const auto t0 = dot(plane.Normal, p0) - plane.T;
-	const auto t1 = dot(plane.Normal, p1) - plane.T;
-	if (t0 < 0)
-	{
-		const auto len = t1 - t0;
-		if (len + t0 < EPSILON)
-		{
-			return false;
-		}
-		const float t = t0 / len;
-		p0.x -= (p1.x - p0.x) * t;
-		p0.y -= (p1.y - p0.y) * t;
-	}
-	else if (t1 < 0)
-	{
-		const auto len = t0 - t1;
-		if (len + t1 < EPSILON)
-		{
-			return false;
-		}
-		const float t = t1 / len;
-		p1.x -= (p0.x - p1.x) * t;
-		p1.y -= (p0.y - p1.y) * t;
-	}
-	return true;
-}
-
-class CCalculateIsovists : public IPSTAlgo
+// NOTE: Objects must be movable!
+template <class T>
+class ObjectPool
 {
 public:
-	bool Run(const SCalculateIsovistsDesc& desc, SCalculateIsovistsRes& res, IProgressCallback& progress)
+	~ObjectPool()
 	{
-		struct AABB
+		if (m_OutstandingBorrowCount)
 		{
-			float2 Center;
-			float2 HalfSize;
-		};
-
-		const float perimeter_segment_angle = desc.m_PerimeterSegmentCount ? PI * 2.f / desc.m_PerimeterSegmentCount : PI * 2.f;
-		const float outer_clipping_radius = desc.m_MaxRadius;
-		const float inner_clipping_radius = desc.m_MaxRadius * cosf(perimeter_segment_angle * .5f);
-
-		// Count total polygon points
-		uint32_t total_polygon_point_count = 0;
-		for (uint32_t polygon_index = 0; polygon_index < desc.m_PolygonCount; ++polygon_index)
-		{
-			total_polygon_point_count += desc.m_PointCountPerPolygon[polygon_index];
+			LOG_ERROR("ObjectPool: Dangling objects when destroyed");
 		}
+	}
 
-		const bool use_cut_off_ring = desc.m_MaxRadius > 0 && desc.m_PerimeterSegmentCount > 2;
-
-		if (total_polygon_point_count > 0 || use_cut_off_ring)
+	inline T Borrow() 
+	{ 
+		++m_OutstandingBorrowCount;
+		if (m_FreeObjects.empty())
 		{
-			const auto aabb = CRectd::BBFromPoints((const double2*)desc.m_PolygonPoints, total_polygon_point_count);
-			const auto world_origin = double2(trunc(aabb.CenterX()), trunc(aabb.CenterY()));
-
-			std::vector<std::pair<float2, float2>> edges;
-			edges.reserve((use_cut_off_ring ? desc.m_PerimeterSegmentCount : 0) + total_polygon_point_count);
-
-			// Calculate clipping planes and also push as edges to start of edge vector
-			std::vector<Plane2Df> clipping_planes;
-			if (use_cut_off_ring)
-			{
-				float angle = -PI + perimeter_segment_angle;
-				float2 pt_prev(-desc.m_MaxRadius, 0);
-				for (uint32_t i = 0; i < desc.m_PerimeterSegmentCount; ++i, angle += perimeter_segment_angle)
-				{
-					float clipping_plane_angle = angle - perimeter_segment_angle * .5f;
-					clipping_planes.push_back({ float2(-cosf(clipping_plane_angle), -sinf(clipping_plane_angle)), -inner_clipping_radius });
-					const float2 pt(cosf(angle) * outer_clipping_radius, sinf(angle) * outer_clipping_radius);
-					edges.push_back({ pt_prev, pt });
-					pt_prev = pt;
-				}
-				edges.back().second = edges.front().first;
-			}
-
-			// Calculate polygon bounding boxes
-			std::vector<AABB> aabb_per_polygon;
-			aabb_per_polygon.reserve(desc.m_PolygonCount);
-			{
-				const double2* points_ptr = (const double2*)desc.m_PolygonPoints;
-				for (uint32_t polygon_index = 0; polygon_index < desc.m_PolygonCount; ++polygon_index)
-				{
-					const auto point_count = desc.m_PointCountPerPolygon[polygon_index];
-					const auto rect = (CRectf)(CRectd::BBFromPoints(points_ptr, point_count) - world_origin);
-					aabb_per_polygon.push_back({ rect.Center(), float2(rect.Width() * .5f, rect.Height() * .5f) });
-					points_ptr += point_count;
-				}
-			}
-				
-			std::vector<float2> pts;
-			CIsovistCalculator isovist_calculator;
-			for (size_t origin_index = 0; origin_index < desc.m_OriginCount; ++origin_index)
-			{
-				const double2 origin = ((const double2*)desc.m_OriginPoints)[origin_index];
-				const float2 local_origin = (float2)(origin - world_origin);
-
-				// Reset edges vector to only contain clipping edges
-				edges.resize(clipping_planes.size());
-
-				// Add edges from polygons
-				const double2* total_points_ptr = (const double2*)desc.m_PolygonPoints;
-				for (uint32_t polygon_index = 0; polygon_index < desc.m_PolygonCount; ++polygon_index)
-				{
-					const auto polygon_point_count = desc.m_PointCountPerPolygon[polygon_index];
-					if (!polygon_point_count)
-					{
-						continue;
-					}
-
-					const auto& aabb = aabb_per_polygon[polygon_index];
-					if (TestAABBCircleOverlap(aabb.Center, aabb.HalfSize, local_origin, outer_clipping_radius))
-					{
-						const bool needs_clipping = !TestAABBFullyInsideCircle(aabb.Center, aabb.HalfSize, local_origin, inner_clipping_radius);
-
-						auto pt_prev = (float2)(total_points_ptr[polygon_point_count - 1] - origin);
-						for (uint32_t point_index = 0; point_index < polygon_point_count; ++point_index)
-						{
-							const auto pt_next = (float2)(total_points_ptr[point_index] - origin);
-							auto edge = std::make_pair(pt_prev, pt_next);
-							if (needs_clipping)
-							{
-								size_t plane_index;
-								for (plane_index = 0; plane_index < clipping_planes.size(); ++plane_index)
-								{
-									if (!ClipLineSegment(edge.first, edge.second, clipping_planes[plane_index]))
-										break;
-								};
-								if (plane_index == clipping_planes.size())
-								{
-									edges.push_back(edge);
-								}
-							}
-							else
-							{
-								edges.push_back(edge);
-							}
-							pt_prev = pt_next;
-						}
-					}
-
-					total_points_ptr += polygon_point_count;
-				}
-
-				pts.clear();
-				isovist_calculator.CalculateIsovist(float2(0, 0), edges.data(), edges.size(), pts);
-
-				m_IsovistPoints.reserve(m_IsovistPoints.size() + pts.size());
-				for (auto it = pts.rbegin(); pts.rend() != it; ++it)
-				{
-					m_IsovistPoints.push_back(double2(origin.x + it->x, origin.y + it->y));
-				}
-				m_PointCountPerIsovist.push_back((uint32_t)pts.size());
-
-				progress.ReportProgress((float)(origin_index + 1) / desc.m_OriginCount);
-			}
+			return T();
 		}
+		auto obj = std::move(m_FreeObjects.back());
+		m_FreeObjects.pop_back();
+		return obj;
+	}
 
-		res.m_IsovistCount = (unsigned int)m_PointCountPerIsovist.size();
-		res.m_PointCountPerIsovist = m_PointCountPerIsovist.empty() ? nullptr : m_PointCountPerIsovist.data();
-		res.m_IsovistPoints = m_IsovistPoints.empty() ? nullptr : &m_IsovistPoints.front().x;
-
-		return true;
+	inline void Return(T&& obj)
+	{
+		m_FreeObjects.push_back(std::forward<T>(obj));
+		--m_OutstandingBorrowCount;
 	}
 
 private:
-	std::vector<uint32_t> m_PointCountPerIsovist;
-	std::vector<double2> m_IsovistPoints;
+	std::vector<T> m_FreeObjects;
+	size_t m_OutstandingBorrowCount = 0;
 };
 
+void CalculateArcClippingPlanesAndSegments(unsigned int perimeter_resolution, float max_distance, float fov_degrees, float direction_degrees, std::vector<Plane2Df>& ret_planes, std::vector<std::pair<float2, float2>>& ret_segments)
+{
+	const size_t first_segment_index = ret_segments.size();
+
+	fov_degrees = clamp<float>(fov_degrees, 0, 360);
+	const auto segment_count = (uint32_t)ceil((fov_degrees * perimeter_resolution) / 360.0f);
+
+	const float segment_angle = deg2rad(fov_degrees / segment_count);
+	const float outer_clipping_distance = max_distance;
+	const float inner_clipping_distance = max_distance * cosf(segment_angle * .5f);
+
+	float direction_rad = (fov_degrees == 360) ? -(float)PI + segment_angle : deg2rad(direction_degrees - fov_degrees * .5f);
+	auto pt_prev = directionVectorfromAngleRad(direction_rad) * outer_clipping_distance;
+	for (uint32_t i = 0; i < segment_count; ++i)
+	{
+		direction_rad += segment_angle;
+		const auto clipping_plane_angle = direction_rad - segment_angle * .5f;
+		ret_planes.push_back({ float2(-cosf(clipping_plane_angle), -sinf(clipping_plane_angle)), -inner_clipping_distance });
+		const auto pt = directionVectorfromAngleRad(direction_rad) * outer_clipping_distance;
+		ret_segments.push_back({ pt_prev, pt });
+		pt_prev = pt;
+	}
+	if (fov_degrees >= 360)
+	{
+		ret_segments.back().second = ret_segments[first_segment_index].first;
+	}
+}
+
+class CIsovistContext: public IPSTAlgo
+{
+public:
+	CIsovistContext(const SCreateIsovistContextDesc& desc, CPSTAlgoProgressCallback& progress);
+
+	void CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProgressCallback& progress);
+
+
+private:
+	inline float2 WorldToLocal(const double2& world_coords) const 
+	{
+		return (float2)(world_coords - m_WorldOrigin);
+	}
+
+	inline double2 LocalToWorld(const float2& local_coords) const
+	{
+		return (double2)local_coords + m_WorldOrigin;
+	}
+
+	static const uint32_t MAX_TREE_DEPTH = 10;
+	static const uint32_t MAX_POLYGONS_PER_LEAF = 64;
+
+	typedef TRect<float> bb_t;
+
+	struct SPolygon
+	{
+		bb_t BB;
+		uint32_t FirstPointIndex;
+		uint32_t PointCount;
+	};
+	typedef std::vector<SPolygon> polygon_vector_t;
+
+	polygon_vector_t m_Polygons;
+	std::vector<float2> m_PolygonPoints;
+
+	typedef LooseBspTree<SPolygon, polygon_vector_t::iterator> tree_t;
+	tree_t m_Tree;
+
+	double2 m_WorldOrigin;
+
+	std::vector<Plane2Df> m_ClippingPlanes;
+	std::vector<std::pair<float2, float2>> m_Edges;
+
+	ObjectPool<std::vector<float2>> m_LocalIsovistPool;
+	ObjectPool<std::vector<double2>> m_WorldIsovistPool;
+
+	CIsovistCalculator m_IsovistCalculator;
+
+	class Result : IPSTAlgo 
+	{
+	public:
+		Result(CIsovistContext& context, std::vector<double2>&& isovist)
+			: m_Context(context)
+			, m_Isovist(std::forward< std::vector<double2>>(isovist))
+		{
+		}
+
+		~Result()
+		{
+			m_Context.m_WorldIsovistPool.Return(std::move(m_Isovist));
+		}
+
+	private:
+		CIsovistContext& m_Context;
+		std::vector<double2> m_Isovist;
+	};
+
+	friend class Result;
+};
+
+CIsovistContext::CIsovistContext(const SCreateIsovistContextDesc& desc, CPSTAlgoProgressCallback& progress)
+{
+	// Count total polygon points
+	uint32_t total_polygon_point_count = 0;
+	for (uint32_t polygon_index = 0; polygon_index < desc.m_PolygonCount; ++polygon_index)
+	{
+		total_polygon_point_count += desc.m_PointCountPerPolygon[polygon_index];
+	}
+
+	if (total_polygon_point_count)
+	{
+		const auto world_aabb = CRectd::BBFromPoints((const double2*)desc.m_PolygonPoints, total_polygon_point_count);
+		m_WorldOrigin = double2(trunc(world_aabb.CenterX()), trunc(world_aabb.CenterY()));
+
+		// Calculate polygon bounding boxes
+		m_Polygons.resize(desc.m_PolygonCount);
+		{
+			const double2* const points_ptr = (const double2*)desc.m_PolygonPoints;
+			uint32_t point_index = 0; 
+			for (uint32_t polygon_index = 0; polygon_index < desc.m_PolygonCount; ++polygon_index)
+			{
+				const auto point_count = desc.m_PointCountPerPolygon[polygon_index];
+				const auto bb = CRectd::BBFromPoints(points_ptr + point_index, point_count);
+				auto& polygon = m_Polygons[polygon_index];
+				polygon.BB = (TRect<float>)(bb - m_WorldOrigin);
+				polygon.FirstPointIndex = point_index;
+				polygon.PointCount = point_count;
+				point_index += point_count;
+			}
+		}
+
+		m_Tree = tree_t::FromObjects(m_Polygons.begin(), m_Polygons.end(), MAX_TREE_DEPTH, MAX_POLYGONS_PER_LEAF, [](const SPolygon& polygon) -> const bb_t& { return polygon.BB; });
+
+		m_PolygonPoints.reserve(total_polygon_point_count);
+		{
+			const double2* const points_ptr = (const double2*)desc.m_PolygonPoints;
+			for (auto& polygon : m_Polygons)
+			{
+				const auto original_first_point = polygon.FirstPointIndex;
+				polygon.FirstPointIndex = (uint32_t)m_PolygonPoints.size();
+				for (uint32_t point_index = original_first_point; point_index < original_first_point + polygon.PointCount; ++point_index)
+				{
+					m_PolygonPoints.push_back(WorldToLocal(points_ptr[point_index]));
+				}
+			}
+		}
+	}
+	else
+	{
+		m_WorldOrigin = double2(0, 0);
+	}
+
+	progress.ReportProgress(1);
+}
+
+// Calculates the radius needed for a segmented circle to have same area as circle with radius 1
+float CalcRadForSegmentedCircle(int seg_count) {
+	const float half_angle = (float)PI / seg_count;
+	return sqrt((float)PI / ((float)seg_count * sin(half_angle) * cos(half_angle)));
+}
+
+void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProgressCallback& progress)
+{
+	desc.m_OutPointCount = 0;
+	desc.m_OutPoints = nullptr;
+	desc.m_OutIsovistHandle = nullptr;
+
+	progress.ReportProgress(1);
+
+	const float perimeter_segment_angle = desc.m_PerimeterSegmentCount ? (float)PI * 2.f / desc.m_PerimeterSegmentCount : (float)PI * 2.f;
+	const float outer_clipping_radius = (float)desc.m_MaxViewDistance * CalcRadForSegmentedCircle(desc.m_PerimeterSegmentCount);
+	const float inner_clipping_radius = outer_clipping_radius * cosf(perimeter_segment_angle * .5f);
+
+	const float2 origin_local = WorldToLocal(double2(desc.m_OriginX, desc.m_OriginY));
+
+	// Clipping planes and edges
+	m_ClippingPlanes.clear();
+	m_Edges.clear();
+	CalculateArcClippingPlanesAndSegments(desc.m_PerimeterSegmentCount, outer_clipping_radius, (float)desc.m_FieldOfViewDegrees, (float)desc.m_DirectionDegrees, m_ClippingPlanes, m_Edges);
+
+	const auto view_direction_vec = directionVectorfromAngleRad(deg2rad((float)desc.m_DirectionDegrees));
+	const auto view_dir_plane = Plane2Df({ view_direction_vec, 0 });
+
+	const auto vec_fov_min = directionVectorfromAngleRad(deg2rad((float)desc.m_DirectionDegrees - .5f * (float)desc.m_FieldOfViewDegrees + 90));
+	const auto vec_fov_max = directionVectorfromAngleRad(deg2rad((float)desc.m_DirectionDegrees + .5f * (float)desc.m_FieldOfViewDegrees - 90));
+	const Plane2Df plane_fov_min = { vec_fov_min, dot(origin_local, vec_fov_min) };
+	const Plane2Df plane_fov_max = { vec_fov_max, dot(origin_local, vec_fov_max) };
+
+	// Add edges from polygons
+	{
+		bool done = false;  // TODO: Do this with cancellation token instead
+		m_Tree.VisitItems(
+			[&](const bb_t& bb) -> bool
+			{
+				return !done && bb.OverlapsCircle(origin_local, outer_clipping_radius);
+			},
+			[&](const SPolygon& polygon)
+			{
+				if (done || !polygon.BB.OverlapsCircle(origin_local, outer_clipping_radius))
+				{
+					return;
+				}
+
+				const auto* points = m_PolygonPoints.data() + polygon.FirstPointIndex;
+
+				if (polygon.BB.Contains(origin_local.x, origin_local.y) && TestPointInRing(origin_local, points, polygon.PointCount))
+				{
+					// Origin is inside a polygon
+					done = true;
+					return;
+				}
+
+				// Check if bb is outside edges of field of view
+				if (desc.m_FieldOfViewDegrees < 360)
+				{
+					const bool behind_fov_edge_min = plane_fov_min.IsBehind(polygon.BB);
+					const bool behind_fov_edge_max = plane_fov_max.IsBehind(polygon.BB);
+					const bool outside = (desc.m_FieldOfViewDegrees <= 180) ? (behind_fov_edge_min | behind_fov_edge_max) : (behind_fov_edge_min & behind_fov_edge_max);
+					if (outside)
+					{
+						return;
+					}
+				}
+
+				const bool needs_clipping = !polygon.BB.FullyInsideCircle(origin_local, inner_clipping_radius);
+
+				auto pt_prev = points[polygon.PointCount - 1] - origin_local;
+				for (uint32_t point_index = 0; point_index < polygon.PointCount; ++point_index)
+				{
+					const auto pt_next = points[point_index] - origin_local;
+					auto edge = std::make_pair(pt_prev, pt_next);
+					pt_prev = pt_next;
+
+					if (needs_clipping)
+					{
+						size_t plane_index;
+						for (plane_index = 0; plane_index < m_ClippingPlanes.size(); ++plane_index)
+						{
+							if (!ClipLineSegment(edge.first, edge.second, m_ClippingPlanes[plane_index]))
+								break;
+						};
+						if (plane_index == m_ClippingPlanes.size())
+						{
+							m_Edges.push_back(edge);
+						}
+					}
+					else
+					{
+						m_Edges.push_back(edge);
+					}
+				}
+			});
+
+		if (done)
+		{
+			return;
+		}
+	}
+
+	auto local_points = m_LocalIsovistPool.Borrow();
+	local_points.clear();
+	
+	m_IsovistCalculator.CalculateIsovist(float2(0, 0), (float)desc.m_FieldOfViewDegrees, (float)desc.m_DirectionDegrees, m_Edges.data(), m_Edges.size(), local_points);
+
+	// Calculate area
+	double area = 0;
+	{
+		auto prev_v = local_points.back();
+		for (size_t i = 0; i < local_points.size(); ++i)
+		{
+			const auto base_v = local_points[i];
+			const auto base_len = base_v.getLength();
+			if (base_len > 0.f) {
+				const auto base_len_inv = 1.f / base_len;
+				const float2 base_n(-base_v.y * base_len_inv, base_v.x * base_len_inv);
+				area += dot(base_n, prev_v) * base_len;  // We divide by two after loop instedad of here!
+			}
+			prev_v = base_v;
+		}
+		area = std::abs(area * .5);  // Don't forget to divide by two here!
+	}
+
+	auto world_isovist = m_WorldIsovistPool.Borrow();
+	world_isovist.clear();
+	world_isovist.reserve(local_points.size());
+
+	for (auto it = local_points.crbegin(); local_points.crend() != it; ++it)
+	{
+		world_isovist.push_back(LocalToWorld(*it + origin_local));
+	}
+
+	m_LocalIsovistPool.Return(std::move(local_points));
+
+	desc.m_OutPointCount = (uint32_t)world_isovist.size();
+	desc.m_OutPoints = &world_isovist.data()->x;
+	desc.m_OutIsovistHandle = new Result(*this, std::move(world_isovist));
+	desc.m_OutArea = (float)area;
+
+	progress.ReportProgress(1);
+}
+
+PSTADllExport psta_handle_t PSTACreateIsovistContext(const SCreateIsovistContextDesc* desc)
+{
+	try {
+		VerifyStructVersion(*desc);
+
+		CPSTAlgoProgressCallback progress(desc->m_ProgressCallback, desc->m_ProgressCallbackUser);
+
+		//psta::CPerfTimer timer;
+		//timer.Start();
+
+		auto isovity_context = std::make_unique<CIsovistContext>(*desc, progress);
+
+		//const auto tick_count = timer.ReadAndRestart();
+		//LOG_INFO("Isovist context created in %.3f msec", psta::CPerfTimer::SecondsFromTicks(tick_count) * 1000.0f);
+
+		return isovity_context.release();
+	}
+	catch (const std::exception& e) {
+		LOG_ERROR(e.what());
+	}
+	catch (...) {
+		LOG_ERROR("Unknown exception");
+	}
+	return nullptr;
+}
+
+PSTADllExport void PSTACalculateIsovist(SCalculateIsovistDesc* desc)
+{
+	try {
+		VerifyStructVersion(*desc);
+
+		auto& context = *(CIsovistContext*)desc->m_IsovistContext;
+
+		CPSTAlgoProgressCallback progress(desc->m_ProgressCallback, desc->m_ProgressCallbackUser);
+
+		//psta::CPerfTimer timer;
+		//timer.Start();
+
+		context.CalculateIsovist(*desc, progress);
+
+		//const auto tick_count = timer.ReadAndRestart();
+		//LOG_INFO("Isovist calculated in %.3f msec", psta::CPerfTimer::SecondsFromTicks(tick_count) * 1000.0f);
+	}
+	catch (const std::exception& e) {
+		LOG_ERROR(e.what());
+	}
+	catch (...) {
+		LOG_ERROR("Unknown exception");
+	}
+}
+
+/*
+// !!! DEPRECATED !!!
 PSTADllExport IPSTAlgo* PSTACalculateIsovists(const SCalculateIsovistsDesc* desc, SCalculateIsovistsRes* res)
 {
 	try {
-		if ((desc->VERSION != desc->m_Version) ||
-			(res->VERSION != res->m_Version)) {
-			throw std::runtime_error("Version mismatch");
-		}
+		VerifyStructVersion(*desc);
+		VerifyStructVersion(*res);
 
 		auto algo = std::make_unique<CCalculateIsovists>();
 
@@ -235,3 +442,4 @@ PSTADllExport IPSTAlgo* PSTACalculateIsovists(const SCalculateIsovistsDesc* desc
 	}
 	return nullptr;
 }
+*/

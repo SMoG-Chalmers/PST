@@ -51,4 +51,11 @@ public:
 	void operator=(const IPSTAlgo&) = delete;
 };
 
+typedef void* psta_handle_t;
+
+typedef int psta_result_t;
+
+#define PSTA_RESULT_OK 0
+#define PSTA_RESULT_ERROR 1
+
 PSTADllExport void PSTAFree(IPSTAlgo* algo);

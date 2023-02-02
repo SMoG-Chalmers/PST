@@ -31,7 +31,7 @@ class CIsovistCalculator
 public:
 	CIsovistCalculator();
 
-	void CalculateIsovist(const float2& origin, const std::pair<float2, float2>* edges, size_t edge_count, std::vector<float2>& ret_points);
+	void CalculateIsovist(const float2& origin, float fov_deg, float direction_deg, const std::pair<float2, float2>* edges, size_t edge_count, std::vector<float2>& ret_points);
 
 private:
 	struct EdgeEndPoint
@@ -64,8 +64,8 @@ private:
 		float2 p0;
 		float2 p1;
 		float2 tangent;
-		float p0_angle;
 		uint32_t index;
+		uint32_t _reserved;
 
 		inline float2 normal() const { return float2(-tangent.y, tangent.x); }
 

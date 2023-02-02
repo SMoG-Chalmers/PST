@@ -24,6 +24,63 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 #include <pstalgo/pstalgo.h>
 #include "Common.h"
 
+
+struct SCreateIsovistContextDesc 
+{
+	SCreateIsovistContextDesc() : m_Version(VERSION) {}
+
+	// Version
+	static const unsigned int VERSION = 1;
+	unsigned int m_Version;
+
+	unsigned int m_PolygonCount;
+	unsigned int* m_PointCountPerPolygon;
+	double* m_PolygonPoints;
+
+	// Progress Callback
+	FPSTAProgressCallback m_ProgressCallback;
+	void*                 m_ProgressCallbackUser;
+};
+
+//  NOTE: The returned handle must be freed with call to PSTAFree().
+PSTADllExport psta_handle_t PSTACreateIsovistContext(const SCreateIsovistContextDesc* desc);
+
+
+struct SCalculateIsovistDesc
+{
+	SCalculateIsovistDesc() : m_Version(VERSION) {}
+
+	// Version
+	static const unsigned int VERSION = 1;
+	unsigned int m_Version;
+
+	psta_handle_t m_IsovistContext;
+
+	double m_OriginX;
+	double m_OriginY;
+	float  m_MaxViewDistance;
+	float  m_FieldOfViewDegrees;
+	float  m_DirectionDegrees;
+	unsigned int m_PerimeterSegmentCount;
+
+	unsigned int m_OutPointCount;
+	double* m_OutPoints;
+	psta_handle_t m_OutIsovistHandle;
+	float m_OutArea;
+
+	// Progress Callback
+	FPSTAProgressCallback m_ProgressCallback;
+	void*                 m_ProgressCallbackUser;
+};
+
+//  NOTE: The handle desc.m_OutIsovistHandle must be freed with call to PSTAFree().
+PSTADllExport void PSTACalculateIsovist(SCalculateIsovistDesc* desc);
+
+
+/*
+
+// !!! DEPRECATED !!!
+
 struct SCalculateIsovistsDesc
 {
 	SCalculateIsovistsDesc() : m_Version(VERSION) {}
@@ -61,3 +118,5 @@ struct SCalculateIsovistsRes
 };
 
 PSTADllExport IPSTAlgo* PSTACalculateIsovists(const SCalculateIsovistsDesc* desc, SCalculateIsovistsRes* res);
+
+*/

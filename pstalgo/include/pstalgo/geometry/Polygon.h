@@ -25,3 +25,43 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 #include <pstalgo/Vec2.h>
 
 double2 PolygonCentroid(const double2* points, uint32 point_count, double& ret_area);
+
+template <class T>
+bool TestPointInRing(const TVec2<T>& point, const TVec2<T>* ring, size_t ring_size)
+{
+	if (ring_size < 3)
+	{
+		return false;
+	}
+	int winding_count = 0;
+	auto p0 = ring[ring_size - 1];
+	for (size_t i = 0; i < ring_size; ++i)
+	{
+		const auto& p1 = ring[i];
+		const int crossing_vertical_mask = (int)((p1.x - point.x) * (p0.x - point.x) >= (T)0) - 1;
+		const auto cross_prod = crp(p0 - point, p1 - p0);
+		const int direction = (cross_prod > 0) - (cross_prod < 0);
+		winding_count += (int)(direction & crossing_vertical_mask);
+		p0 = p1;
+	}
+	return winding_count != 0;
+}
+
+template <class T>
+bool TestPointInPolygon(const TVec2<T>& point, const TVec2<T>* perimeter, size_t perimeter_size, const TVec2<T>* const* holes, const size_t* hole_sizes, size_t hole_count)
+{
+	if (!TestPointInRing(point, perimeter, perimeter_size))
+	{
+		return false;
+	}
+
+	for (size_t hole_index = 0; hole_index < hole_count; ++hole_index)
+	{
+		if (TestPointInRing(point, holes[hole_index], hole_sizes[hole_index]))
+		{
+			return false;
+		}
+	}
+
+	return true;
+}

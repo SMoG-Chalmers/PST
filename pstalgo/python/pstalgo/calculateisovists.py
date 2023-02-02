@@ -21,9 +21,89 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 import ctypes
 from ctypes import byref, cdll, POINTER, Structure, c_double, c_float, c_int, c_uint, c_void_p
-from .common import _DLL, PSTALGO_PROGRESS_CALLBACK, CreateCallbackWrapper, UnpackArray, DumpStructure
+from .common import _DLL, PSTALGO_PROGRESS_CALLBACK, DOUBLE_PTR, CreateCallbackWrapper, UnpackArray, DumpStructure
+
+class SCreateIsovistContextDesc(Structure) :
+	_fields_ = [
+		("m_Version", c_uint),
+		("m_PolygonCount", c_uint),
+		("m_PointCountPerPolygon", POINTER(c_uint)),
+		("m_PolygonPoints", POINTER(c_double)),
+		("m_ProgressCallback", PSTALGO_PROGRESS_CALLBACK),
+		("m_ProgressCallbackUser", c_void_p),
+	]
+	def __init__(self, *args):
+		Structure.__init__(self, *args)
+		self.m_Version = 1
+
+class SCalculateIsovistDesc(Structure) :
+	_fields_ = [
+		("m_Version", c_uint),
+		("m_IsovistContext", c_void_p),
+		("m_OriginX", c_double),
+		("m_OriginY", c_double),
+		("m_MaxViewDistance", c_float),
+		("m_FieldOfViewDegrees", c_float),
+		("m_DirectionDegrees", c_float),
+		("m_PerimeterSegmentCount", c_uint),
+		("m_OutPointCount", c_uint),
+		("m_OutPoints", POINTER(c_double)),
+		("m_OutIsovistHandle", c_void_p),
+		("m_OutArea", c_float),
+		("m_ProgressCallback", PSTALGO_PROGRESS_CALLBACK),
+		("m_ProgressCallbackUser", c_void_p),
+	]
+	def __init__(self, *args):
+		Structure.__init__(self, *args)
+		self.m_Version = 1
 
 
+def PSTACreateIsovistContext(psta, desc):
+	#print("\SCreateIsovistContextDesc:")
+	#DumpStructure(desc)
+	fn = psta.PSTACreateIsovistContext
+	fn.argtypes = [POINTER(SCreateIsovistContextDesc)]
+	fn.restype = c_void_p
+	return fn(byref(desc))
+
+def PSTACalculateIsovist(psta, desc):
+	#print("\PSTACalculateIsovist:")
+	#DumpStructure(desc)
+	fn = psta.PSTACalculateIsovist
+	fn.argtypes = [POINTER(SCalculateIsovistDesc)]
+	fn.restype = None
+	return fn(byref(desc))
+
+
+""" The returned context must be freed with call to Free(). """
+def CreateIsovistContext(point_count_per_polygon, polygon_coords, progress_callback = None):
+	desc = SCreateIsovistContextDesc()
+	(desc.m_PointCountPerPolygon, desc.m_PolygonCount) = UnpackArray(point_count_per_polygon, 'I')
+	(desc.m_PolygonPoints, n) = UnpackArray(polygon_coords, 'd')
+	desc.m_ProgressCallback = CreateCallbackWrapper(progress_callback)
+	desc.m_ProgressCallbackUser = c_void_p() 
+	isovist_context = PSTACreateIsovistContext(_DLL, desc)
+	if 0 == isovist_context:
+		raise Exception("CreateIsovistContext failed.")
+	return isovist_context
+
+""" The returned handle must be freed with call to Free(). """
+def CalculateIsovist(isovist_context, originX, originY, max_view_distance, field_of_view_degrees, direction_degrees, perimeter_segment_count, progress_callback = None):
+	desc = SCalculateIsovistDesc()
+	desc.m_IsovistContext = isovist_context
+	desc.m_OriginX = originX
+	desc.m_OriginY = originY
+	desc.m_MaxViewDistance = max_view_distance
+	desc.m_FieldOfViewDegrees = field_of_view_degrees
+	desc.m_DirectionDegrees = direction_degrees
+	desc.m_PerimeterSegmentCount = perimeter_segment_count
+	desc.m_ProgressCallback = CreateCallbackWrapper(progress_callback)
+	desc.m_ProgressCallbackUser = c_void_p()
+	PSTACalculateIsovist(_DLL, desc)
+	return (desc.m_OutPointCount, desc.m_OutPoints, desc.m_OutIsovistHandle, desc.m_OutArea)
+
+
+"""
 class SCalculateIsovistsDesc(Structure) :
 	_fields_ = [
 		("m_Version", c_uint),
@@ -81,3 +161,4 @@ def CalculateIsovists(point_count_per_polygon, polygon_coords, origin_coords, ma
 		raise Exception("CalculateIsovists failed.")
 
 	return (res, algo)
+"""
