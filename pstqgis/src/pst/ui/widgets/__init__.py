@@ -24,3 +24,5 @@ from .propertysheet import PropertySheetWidget, PropertyStyle, PropertyState
 from .tabledataselectionwidget import TableDataSelectionWidget
 from .widgetenablecheckbox import WidgetEnableCheckBox
 from .widgetenableradiobutton import WidgetEnableRadioButton
+from .colorpicker import ColorPicker
+from .progressdialog import ProgressDialog

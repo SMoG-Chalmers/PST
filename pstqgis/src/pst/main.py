@@ -25,11 +25,13 @@ from qgis.PyQt.QtCore import QObject
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QMessageBox
 from qgis.core import *
-from qgis.core import Qgis
+from qgis.core import Qgis, QgsMessageLog
 from .analyses import SplitPolylinesAnalysis, CreateSegmentMapAnalysis, CreateJunctionsAnalysis, ReachAnalysis, NetworkIntegrationAnalysis, AngularIntegrationAnalysis, NetworkBetweennessAnalysis, AngularChoiceAnalysis, AngularBetweennessAnalysis, AttractionDistanceAnalysis, AttractionReachAnalysis, AttractionBetweennessAnalysis, IsovistAnalysis
 from .model import QGISModel, Settings
 from .ui import wizards
 from . import APP_TITLE
+from .maptools import IsovistMapTool
+import os, pathlib
 
 MENU_TITLE = APP_TITLE
 
@@ -48,17 +50,56 @@ class PSTPlugin(object):
 		self._settings.load()
 		self._model = QGISModel()
 		self._logHandle = None
+		self._rootPath = str(pathlib.Path(__file__).parent.resolve())
+		self._vectorToolBarActions = []
+
+	def resolveLocalPath(self, localPath):
+		return os.path.join(self._rootPath, localPath)
 
 	def initGui(self):
 		self._actions = self.createActions()
 		# Create menu
 		for a in self._actions:
 			self.iface.addPluginToVectorMenu(MENU_TITLE, a)
+		self.initToolbar()
 
 	def unload(self):
 		# Remove menu
 		for a in self._actions:
 			self.iface.removePluginVectorMenu(MENU_TITLE, a)
+		
+		self.uninitToolbar()
+
+	def createMapToolAction(self, tool, name, icon = None, menu = None):
+		icon = QIcon(self.resolveLocalPath(icon)) if isinstance(icon, str) else icon
+		action = QAction(icon, name, self.iface.mainWindow())
+		action.setCheckable(True)
+		action.setChecked(False)
+		def OnTrigger():
+			canvas = self.iface.mapCanvas()
+			if action.isChecked():
+				if hasattr(tool, 'tryActivate') and not tool.tryActivate():
+					action.setChecked(False)
+					return
+				self.initLog()
+				canvas.setMapTool(tool)
+			else:
+				canvas.unsetMapTool(tool)
+		action.triggered.connect(OnTrigger)
+		tool.setAction(action)
+		self.addVectorToolbarAction(action)
+		return action
+
+	def addVectorToolbarAction(self, action):
+		self.iface.addVectorToolBarIcon(action)
+		self._vectorToolBarActions.append(action)
+
+	def initToolbar(self):
+		pass
+
+	def uninitToolbar(self):
+		for action in self._vectorToolBarActions:
+			self.iface.removeVectorToolBarIcon(action)
 
 	def createActions(self):
 		ACTIONS = [
@@ -83,9 +124,11 @@ class PSTPlugin(object):
 				None,
 				('Segment Grouping',          lambda : self.onAnalysis(wizards.SegmentGroupingWiz,         SegmentGroupingAnalysis),         None),
 				('Segment Group Integration', lambda : self.onAnalysis(wizards.SegmentGroupIntegrationWiz, SegmentGroupIntegrationAnalysis), None),
-				#None,
-				#('Isovists',                  lambda : self.onAnalysis(wizards.IsovistWiz,                 IsovistAnalysis),                 None),
 			]
+
+		ACTIONS += [
+			None,
+		]
 
 		actions = []
 		for a in ACTIONS:
@@ -98,6 +141,9 @@ class PSTPlugin(object):
 				act = QAction(a[0], self.iface.mainWindow()) if icon is None else QAction(icon, a[0], self.iface.mainWindow())
 				act.triggered.connect(a[1])
 			actions.append(act)
+
+		actions.append(self.createMapToolAction(IsovistMapTool(self.iface, self.iface.mapCanvas(), self._model),  "Isovist tool", "img/isovist_tool.png"))
+
 		return actions
 
 	@staticmethod

@@ -29,7 +29,8 @@ def MetaData():
 		import os, configparser
 		my_dir = os.path.dirname(os.path.abspath(__file__))
 		metadata_path = os.path.join(my_dir, 'metadata.txt')
-		metadata_contents = open(metadata_path, encoding="utf-8").read()
+		with open(metadata_path, encoding="utf-8") as f:
+			metadata_contents = f.read()
 		metadata = configparser.ConfigParser()
 		metadata.read_string(metadata_contents)
 	return metadata

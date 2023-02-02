@@ -305,7 +305,7 @@ class QGISModel(object):
 			progress.setProgress(1)
 		return (coords, polys)
 
-	def readPolygons(self, table_name, out_coord_counts, out_rowids, progress = None):
+	def readPolygons(self, table_name, out_coord_counts, out_rowids = None, progress = None):
 		coords = array.array('d')
 		layer = self._layerFromName(table_name)
 		num_features = layer.featureCount()

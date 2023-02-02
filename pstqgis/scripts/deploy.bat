@@ -14,6 +14,7 @@ mkdir %deploy_dir%
 mkdir %deploy_dir%\pst
 
 xcopy %pstqgis_dir%\src\pst\*.py         %deploy_dir%\pst /sy
+xcopy %pstqgis_dir%\src\pst\*.png        %deploy_dir%\pst /sy
 xcopy %pstqgis_dir%\src\pst\metadata.txt %deploy_dir%\pst /y
 copy  %pstqgis_dir%\doc\readme.txt       %deploy_dir%\pst /y
 
