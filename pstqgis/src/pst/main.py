@@ -36,6 +36,7 @@ import os, pathlib
 MENU_TITLE = APP_TITLE
 
 ENABLE_EXPERIMENTAL_ANALYSES = True
+ENABLE_MAP_TOOLS = False
 
 QGIS_ERROR_LEVEL_FROM_PSTA_LEVEL = [Qgis.Info, Qgis.Info, Qgis.Warning, Qgis.Critical]
 
@@ -61,14 +62,15 @@ class PSTPlugin(object):
 		# Create menu
 		for a in self._actions:
 			self.iface.addPluginToVectorMenu(MENU_TITLE, a)
-		self.initToolbar()
+		if ENABLE_MAP_TOOLS:
+			self.initToolbar()
 
 	def unload(self):
 		# Remove menu
 		for a in self._actions:
 			self.iface.removePluginVectorMenu(MENU_TITLE, a)
-		
-		self.uninitToolbar()
+		if ENABLE_MAP_TOOLS:
+			self.uninitToolbar()
 
 	def createMapToolAction(self, tool, name, icon = None, menu = None):
 		icon = QIcon(self.resolveLocalPath(icon)) if isinstance(icon, str) else icon
@@ -126,9 +128,10 @@ class PSTPlugin(object):
 				('Segment Group Integration', lambda : self.onAnalysis(wizards.SegmentGroupIntegrationWiz, SegmentGroupIntegrationAnalysis), None),
 			]
 
-		ACTIONS += [
-			None,
-		]
+		if ENABLE_MAP_TOOLS:
+			ACTIONS += [
+				None,
+			]
 
 		actions = []
 		for a in ACTIONS:
@@ -142,7 +145,8 @@ class PSTPlugin(object):
 				act.triggered.connect(a[1])
 			actions.append(act)
 
-		actions.append(self.createMapToolAction(IsovistMapTool(self.iface, self.iface.mapCanvas(), self._model),  "Isovist tool", "img/isovist_tool.png"))
+		if ENABLE_MAP_TOOLS:
+			actions.append(self.createMapToolAction(IsovistMapTool(self.iface, self.iface.mapCanvas(), self._model),  "Isovist tool", "img/isovist_tool.png"))
 
 		return actions
 
