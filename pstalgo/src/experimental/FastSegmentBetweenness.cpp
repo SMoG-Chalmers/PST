@@ -170,8 +170,13 @@ namespace psta
 			ret_segment_index = m_SegmentIndex++;
 			if (ret_segment_index >= m_SegmentCount)
 				return false;
-			m_ProgressCallback.ReportProgress((float)ret_segment_index / m_SegmentCount);
 			return !m_ProgressCallback.GetCancel();
+		}
+
+		// NOTE: This function should only be called from the main thread
+		void UpdateProgress()
+		{
+			m_ProgressCallback.ReportProgress((float)m_SegmentIndex / m_SegmentCount);
 		}
 
 		void ReportNodeCountAndTotalDepth(unsigned int segment_index, unsigned int node_count, float total_depth) {
@@ -586,7 +591,12 @@ namespace psta
 		}
 
 		for (auto& task : tasks)
-			task.wait();
+		{
+			while (std::future_status::ready != task.wait_for(std::chrono::milliseconds(50)))
+			{
+				ctx.UpdateProgress();
+			}
+		}
 
 		memset(out_scores, 0, seg_graph.GetSegmentCount() * sizeof(float));
 
@@ -597,6 +607,8 @@ namespace psta
 			for (unsigned int i = 0; i < seg_graph.GetSegmentCount(); ++i)
 				out_scores[i] += (float)scores[i];
 		}
+
+		progress_callback.ReportProgress(1);
 
 		#ifdef PERF_ENABLED
 			pstdbg::Log(pstdbg::EErrorLevel_Info, nullptr, "FastSegmentBetweenness performed in %.3f sec.", CPerfTimer::SecondsFromTicks(perf_timer.ReadAndRestart()));
