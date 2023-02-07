@@ -77,7 +77,10 @@ class TaskSplitProgressDelegate(object):
 			self._delegate.setStatus(self._getText())
 
 	def setStatus(self, text):
-		self._delegate.setStatus(self._getText() + " (%s)" % text)
+		if self._text:
+			self._delegate.setStatus(self._getText() + " (%s)" % text)
+		else:
+			self._delegate.setStatus(text)
 
 	def setProgress(self, progress):
 		if self._count > 0:

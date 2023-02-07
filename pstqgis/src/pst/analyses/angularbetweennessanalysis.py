@@ -89,13 +89,13 @@ class AngularBetweennessAnalysis(BaseAnalysis):
 			total_depth_weights = Vector(ctypes.c_float, line_count, stack_allocator, line_count) if props['weight_length'] else None
 
 			progress.setCurrentTask(Tasks.ANALYSIS)
-			analysis_progress = TaskSplitProgressDelegate(analysis_count, "Performing analysis", progress)
+			analysis_progress = TaskSplitProgressDelegate(analysis_count, "", progress)
 
 			def DoAnalysis(weigh_by_length, output_counters):
 				# Analysis sub progress
 				analysis_sub_progress = MultiTaskProgressDelegate(analysis_progress)
-				analysis_sub_progress.addTask(Tasks.ANALYSIS, 3, "Calculating")
-				analysis_sub_progress.addTask(Tasks.WRITE_RESULTS, 1, "Writing line results")
+				analysis_sub_progress.addTask(Tasks.ANALYSIS, 3, "Performing analysis")
+				analysis_sub_progress.addTask(Tasks.WRITE_RESULTS, 1, "Writing results")
 				# Analysis
 				analysis_sub_progress.setCurrentTask(Tasks.ANALYSIS)
 				pstalgo.FastSegmentBetweenness(
