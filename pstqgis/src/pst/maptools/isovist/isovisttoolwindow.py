@@ -106,7 +106,7 @@ class IsovistToolWindow(QWidget):
 
 	def __init__(self, parent):
 		QWidget.__init__(self, parent, Qt.Tool)
-		self.setWindowTitle("PST - View Cone Tool")
+		self.setWindowTitle("PST - Isovist Tool")
 		self.readOnly = False
 		self.locale = QLocale()  # Default (system)
 		# self.locale = QLocale(QLocale.UnitedStates)
@@ -275,7 +275,7 @@ class IsovistToolWindow(QWidget):
 		action.setParent(menu)
 		for layer in allPointLayers():
 			action = QAction(layer.name(), menu)
-			action.triggered.connect(lambda: self.addToPointLayer.emit(layer))
+			action.triggered.connect(lambda checked, layer=layer: self.addToPointLayer.emit(layer))
 			menu.addAction(action)
 		menu.setAttribute(Qt.WA_DeleteOnClose)
 		globalPos = self.btnAddToPointLayer.mapToGlobal(QPoint(0,self.btnAddToPointLayer.height()))
@@ -291,7 +291,7 @@ class IsovistToolWindow(QWidget):
 		action.setParent(menu)
 		for layer in allPolygonLayers():
 			action = QAction(layer.name(), menu)
-			action.triggered.connect(lambda: self.addToPolygonLayer.emit(layer))
+			action.triggered.connect(lambda checked, layer=layer: self.addToPolygonLayer.emit(layer))
 			menu.addAction(action)
 		menu.setAttribute(Qt.WA_DeleteOnClose)
 		globalPos = self.btnAddToPolygonLayer.mapToGlobal(QPoint(0,self.btnAddToPolygonLayer.height()))

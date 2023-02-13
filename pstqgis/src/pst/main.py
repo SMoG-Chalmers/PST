@@ -36,7 +36,7 @@ import os, pathlib
 MENU_TITLE = APP_TITLE
 
 ENABLE_EXPERIMENTAL_ANALYSES = True
-ENABLE_MAP_TOOLS = False
+ENABLE_MAP_TOOLS = True
 
 QGIS_ERROR_LEVEL_FROM_PSTA_LEVEL = [Qgis.Info, Qgis.Info, Qgis.Warning, Qgis.Critical]
 

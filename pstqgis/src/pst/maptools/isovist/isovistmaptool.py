@@ -100,6 +100,10 @@ def log(msg):
 	if ENABLE_LOGGING:
 		QgsMessageLog.logMessage("(IsovistMapTool) " + msg, 'PST', level=Qgis.Info)
 
+def QColorToHtml(color):
+	if color.alpha() == 255:
+		return "#%.2x%.2x%.2x" % (color.red(), color.green(), color.blue())
+	return "#%.2x%.2x%.2x%.2x" % (color.alpha(), color.red(), color.green(), color.blue())
 
 class IsovistMapTool(QgsMapTool):
 	def __init__(self, iface, canvas, model):
@@ -310,13 +314,17 @@ class IsovistMapTool(QgsMapTool):
 			if not ok:
 				return
 			layer = self._createPointLayer(layerName)
+		elif not self._checkMissingAttributes(layer, POINT_FIELDS):
+			return
 
 		viewCone = self.currentItem()
 
 		feature = QgsFeature()
 
 		# Geometry
-		feature.setGeometry( QgsGeometry.fromPointXY(QgsPointXY(self.originX, self.originY)) )
+		map_point = QgsPointXY(self.originX, self.originY)
+		layer_point = self.toLayerCoordinates(layer, map_point)
+		feature.setGeometry( QgsGeometry.fromPointXY(layer_point) )
 
 		# Attributes
 		values = self.getViewConeAttributes(viewCone)
@@ -339,6 +347,8 @@ class IsovistMapTool(QgsMapTool):
 			if not ok:
 				return
 			layer = self._createPolygonLayer(layerName)
+		elif not self._checkMissingAttributes(layer, POLYGON_FIELDS):
+			return
 
 		viewCone = self.currentItem()
 
@@ -346,8 +356,9 @@ class IsovistMapTool(QgsMapTool):
 
 		# Geometry
 		(coordinate_elements, pointCount) = viewCone.polygonPoints()
-		points = [QgsPointXY(coordinate_elements[i * 2], coordinate_elements[i * 2 + 1]) for i in range(pointCount)]
-		feature.setGeometry(QgsGeometry.fromPolygonXY([points]))
+		map_points = [QgsPointXY(coordinate_elements[i * 2], coordinate_elements[i * 2 + 1]) for i in range(pointCount)]
+		layer_points = [self.toLayerCoordinates(layer, point) for point in map_points]
+		feature.setGeometry(QgsGeometry.fromPolygonXY([layer_points]))
 
 		# Attributes
 		values = self.getViewConeAttributes(viewCone)
@@ -363,6 +374,30 @@ class IsovistMapTool(QgsMapTool):
 			layer.startEditing()
 
 		layer.addFeature(feature)
+
+	def _checkMissingAttributes(self, layer, fields):
+		current_fields = layer.fields()
+		missing_fields = [field for field in fields if current_fields.indexFromName(field[0]) < 0]
+		if missing_fields:
+			# Ask user if missing fields should be added to layer
+			plural_suffix = 's' if len(missing_fields) > 1 else ''
+			missing_field_names = [field[0] for field in missing_fields]
+			msg = "The layer '%s' is missing the following attribute%s: %s\n\nDo you want %s attribute%s to be added?" % (layer.name(), plural_suffix, ', '.join(missing_field_names), 'these' if plural_suffix else 'this', plural_suffix)
+			reply = QMessageBox.question(self.iface.mainWindow(), "PST - Missing attributes", msg, QMessageBox.Yes | QMessageBox.No);
+			if reply == QMessageBox.Yes:
+				# Add missing fields to layer
+				if not layer.isEditable():
+					layer.startEditing()
+				layer.dataProvider()
+				fields_to_add = [QgsField(field[0], field[1]) for field in missing_fields]
+				if not layer.dataProvider().addAttributes(fields_to_add):
+					QMessageBox.critical(self.iface.mainWindow(), "PST - Error", "Couldn't add attributes to layer '%s'." % layer.name(), QMessageBox.Ok)
+					return False
+				layer.updateFields()	
+			elif reply != QMessageBox.No:
+				# Assume "Cancel"
+				return False
+		return True
 
 	def getViewConeAttributes(self, viewCone):
 		values = {}
@@ -388,8 +423,7 @@ class IsovistMapTool(QgsMapTool):
 	def _createPolygonLayer(self, name):
 		layer = QgsVectorLayer("Polygon", name, "memory")
 		layer.startEditing()
-		symbol = QgsFillSymbol.createSimple({'color' : self.currentItem().color()})
-		#symbol = QgsMarkerSymbol.createSimple({'name': 'square', 'color': 'red'})
+		symbol = QgsFillSymbol.createSimple({'color' : QColorToHtml(self.currentItem().color())})
 		layer.renderer().setSymbol(symbol)
 		layer.setCrs(QgsProject.instance().crs())
 		dataProvider = layer.dataProvider()
