@@ -22,7 +22,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 from builtins import str
 from builtins import range
 from builtins import object
-from qgis.PyQt.QtCore import QVariant
+from qgis.PyQt.QtCore import Qt, QVariant
 from qgis.PyQt.QtGui import QColor
 import array, math
 
@@ -123,20 +123,24 @@ class QGISModel(object):
 		if geo_iter is not None or columns:
 			self._append(layer, geo_iter, [c[2] for c in columns], row_count, progress)
 		QgsProject.instance().addMapLayer(layer)
+		return layer.id()
 
 	def makeThematic(self, table, column, ranges):
 		layer = self._layerFromName(table)
 		old_renderer = layer.renderer()
 		symbol_props = None if isinstance(old_renderer, QgsCategorizedSymbolRenderer) else old_renderer.symbol().symbolLayer(0).properties()
-		layer.setRenderer(self._createCategoryRenderer(symbol_props, column, ranges))
+		symbol_props = None
+		layer.setRenderer(self._createCategoryRenderer(symbol_props, column, ranges, layer.geometryType()))
 		self._refreshLayer(layer)
 
-	def _createCategoryRenderer(self, symbol_props, column, ranges):
+	def _createCategoryRenderer(self, symbol_props, column, ranges, geometryType):
 		categories = []
 		for r in ranges:
 			if symbol_props is None:
-				symbol = QgsLineSymbol.createSimple({})
+				#symbol = QgsLineSymbol.createSimple({})
+				symbol = QgsSymbol.defaultSymbol(geometryType)
 				symbol.setColor(QColor(*r[1]))
+				symbol.symbolLayer(0).setStrokeStyle(Qt.PenStyle(Qt.NoPen))
 			else:
 				symbol_props['line_color'] = ','.join([str(b) for b in r[1]])
 				symbol = QgsLineSymbol.createSimple(symbol_props)
@@ -305,8 +309,8 @@ class QGISModel(object):
 			progress.setProgress(1)
 		return (coords, polys)
 
-	def readPolygons(self, table_name, out_coord_counts, out_rowids = None, progress = None):
-		coords = array.array('d')
+	def readPolygons(self, table_name, out_coord_counts, out_rowids = None, progress = None, out_coords = None):
+		coords = array.array('d') if out_coords is None else out_coords
 		layer = self._layerFromName(table_name)
 		num_features = layer.featureCount()
 		for feature_index, feature in enumerate(layer.getFeatures()):
@@ -402,11 +406,11 @@ class QGISModel(object):
 		progress.setProgress(1)
 		layer.updateExtents()
 
-	def _layerFromName(self, name):
+	def _layerFromName(self, nameOrId):
 		for _, layer in QgsProject.instance().mapLayers().items():
-			if layer.name() == name:
+			if layer.name() == nameOrId or layer.id() == nameOrId:
 				return layer
-		raise Exception("Table '%s' not found!" % name)
+		raise Exception("Table '%s' not found!" % nameOrId)
 
 	def _safeFieldIndex(self, layer, name):
 		idx = layer.fields().indexFromName(name)

@@ -23,7 +23,8 @@ from builtins import range
 from builtins import object
 import ctypes
 from .base import AnalysisException
-
+from qgis.core import QgsMessageLog, QgsRectangle, QgsProject, QgsProcessingUtils, QgsRasterDataProvider, QgsRasterLayer, QgsRasterShader, QgsColorRampShader, QgsSingleBandPseudoColorRenderer
+from osgeo import gdal
 
 class MultiTaskProgressDelegate(object):
 	def __init__(self, delegate):
@@ -244,3 +245,51 @@ def MeanDepthGen(TD_vector, N_vector):
 def PointGen(coord_vector, model):
 	for i in range(int(coord_vector.size()/2)):
 		yield model.createPoint(coord_vector.at(i*2), coord_vector.at(i*2+1))
+
+def Log(msg):
+	QgsMessageLog.logMessage(msg, 'PST', level=Qgis.Info)
+
+def CreateRasterFromPstaHandle(rasterHandle, crs=None):
+	import pstalgo  # Do it here when it is needed instead of on plugin load
+	rasterData = pstalgo.GetRasterData(rasterHandle)
+	gdal_data_type = GdalDataTypeFromPstaRasterFormat(rasterData.Format)
+	data = (CTypeFromPstaRasterFormat(rasterData.Format) * (rasterData.Width * rasterData.Height)).from_address(rasterData.Bits)
+	layer = CreateRasterLayer('raster', gdal_data_type, rasterData.Width, rasterData.Height, rasterData.BBMinX, rasterData.BBMinY, rasterData.BBMaxX, rasterData.BBMaxY, data=data, crs=crs)
+	return layer
+
+def CreateRasterLayer(base_name, gdal_data_type, resx, resy, minx, miny, maxx, maxy, data=None, crs=None):
+	driver = gdal.GetDriverByName('GTiff')
+	file_name = QgsProcessingUtils.generateTempFilename(GenerateTempFileName('raster') + '.tiff')
+	ds = driver.Create(file_name, xsize=resx, ysize=resy, bands=1, eType=gdal_data_type, options=["COMPRESS=LZW"])
+	pixelSizeX = (maxx - minx) / resx
+	pixelSizeY = (maxy - miny) / resy
+	ds.SetGeoTransform([minx, pixelSizeX, 0, maxy, 0, -pixelSizeY])
+	if data is not None:
+		ds.GetRasterBand(1).WriteRaster(0, 0, resx, resy, data)
+	ds = None
+	del ds
+	layer = QgsRasterLayer(file_name)
+	layer.setCrs(crs if crs is not None else QgsProject.instance().crs())
+	return layer
+
+def CTypeFromPstaRasterFormat(rasterFormat):
+	from pstalgo import RasterFormat
+	if rasterFormat == RasterFormat.Byte:
+		return ctypes.c_ubyte
+	if rasterFormat == RasterFormat.Float:
+		return ctypes.c_float
+	raise Exception("Unknown raster format")
+
+def GdalDataTypeFromPstaRasterFormat(rasterFormat):
+	from pstalgo import RasterFormat
+	if rasterFormat == RasterFormat.Byte:
+		return gdal.GDT_Byte
+	if rasterFormat == RasterFormat.Float:
+		return gdal.GDT_Float32
+	raise Exception("Unknown raster format")
+
+_TempFileNameCounter = 0
+def GenerateTempFileName(base_name):
+	global _TempFileNameCounter
+	_TempFileNameCounter += 1
+	return '%s%d' % (base_name, _TempFileNameCounter)

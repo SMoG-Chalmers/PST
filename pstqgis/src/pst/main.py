@@ -26,7 +26,7 @@ from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QMessageBox
 from qgis.core import *
 from qgis.core import Qgis, QgsMessageLog
-from .analyses import SplitPolylinesAnalysis, CreateSegmentMapAnalysis, CreateJunctionsAnalysis, ReachAnalysis, NetworkIntegrationAnalysis, AngularIntegrationAnalysis, NetworkBetweennessAnalysis, AngularChoiceAnalysis, AngularBetweennessAnalysis, AttractionDistanceAnalysis, AttractionReachAnalysis, AttractionBetweennessAnalysis, IsovistAnalysis
+from . import analyses
 from .model import QGISModel, Settings
 from .ui import wizards
 from . import APP_TITLE
@@ -105,27 +105,28 @@ class PSTPlugin(object):
 
 	def createActions(self):
 		ACTIONS = [
-			('Split Polylines',        lambda : self.onAnalysis(wizards.SplitPolylinesWiz,        SplitPolylinesAnalysis), None),
-			('Create Segment Map',     lambda : self.onAnalysis(wizards.CreateSegmentMapWiz,      CreateSegmentMapAnalysis), None),
-			('Create Junctions',       lambda : self.onAnalysis(wizards.CreateJunctionsWiz,       CreateJunctionsAnalysis), None),
+			('Split Polylines',        lambda : self.onAnalysis(wizards.SplitPolylinesWiz,        analyses.SplitPolylinesAnalysis), None),
+			('Create Segment Map',     lambda : self.onAnalysis(wizards.CreateSegmentMapWiz,      analyses.CreateSegmentMapAnalysis), None),
+			('Create Junctions',       lambda : self.onAnalysis(wizards.CreateJunctionsWiz,       analyses.CreateJunctionsAnalysis), None),
+			('Compare Results',        lambda : self.onAnalysis(wizards.CompareResultsWiz,        analyses.CompareResultsAnalysis), None),
 			None,
-			('Reach',                  lambda : self.onAnalysis(wizards.ReachWiz,                 ReachAnalysis), None),
-			('Network Integration',    lambda : self.onAnalysis(wizards.NetworkIntegrationWiz,    NetworkIntegrationAnalysis), None),
-			('Angular Integration',    lambda : self.onAnalysis(wizards.AngularIntegrationWiz,    AngularIntegrationAnalysis), None),
-			('Network Betweenness',    lambda : self.onAnalysis(wizards.NetworkBetweennessWiz,    NetworkBetweennessAnalysis), None),
-			('Angular Betweenness',    lambda : self.onAnalysis(wizards.AngularBetweennessWiz,    AngularBetweennessAnalysis), None),
-			('Angular Choice',         lambda : self.onAnalysis(wizards.AngularChoiceWiz,         AngularChoiceAnalysis), None),
-			('Attraction Distance',    lambda : self.onAnalysis(wizards.AttractionDistanceWiz,    AttractionDistanceAnalysis), None),
-			('Attraction Reach',       lambda : self.onAnalysis(wizards.AttractionReachWiz,       AttractionReachAnalysis), None),
-			('Attraction Betweenness', lambda : self.onAnalysis(wizards.AttractionBetweennessWiz, AttractionBetweennessAnalysis), None),
+			('Reach',                  lambda : self.onAnalysis(wizards.ReachWiz,                 analyses.ReachAnalysis), None),
+			('Network Integration',    lambda : self.onAnalysis(wizards.NetworkIntegrationWiz,    analyses.NetworkIntegrationAnalysis), None),
+			('Angular Integration',    lambda : self.onAnalysis(wizards.AngularIntegrationWiz,    analyses.AngularIntegrationAnalysis), None),
+			('Network Betweenness',    lambda : self.onAnalysis(wizards.NetworkBetweennessWiz,    analyses.NetworkBetweennessAnalysis), None),
+			('Angular Betweenness',    lambda : self.onAnalysis(wizards.AngularBetweennessWiz,    analyses.AngularBetweennessAnalysis), None),
+			('Angular Choice',         lambda : self.onAnalysis(wizards.AngularChoiceWiz,         analyses.AngularChoiceAnalysis), None),
+			('Attraction Distance',    lambda : self.onAnalysis(wizards.AttractionDistanceWiz,    analyses.AttractionDistanceAnalysis), None),
+			('Attraction Reach',       lambda : self.onAnalysis(wizards.AttractionReachWiz,       analyses.AttractionReachAnalysis), None),
+			('Attraction Betweenness', lambda : self.onAnalysis(wizards.AttractionBetweennessWiz, analyses.AttractionBetweennessAnalysis), None),
 		]
 
 		if ENABLE_EXPERIMENTAL_ANALYSES:
 			from .analyses import SegmentGroupingAnalysis, SegmentGroupIntegrationAnalysis
 			ACTIONS += [
 				None,
-				('Segment Grouping',          lambda : self.onAnalysis(wizards.SegmentGroupingWiz,         SegmentGroupingAnalysis),         None),
-				('Segment Group Integration', lambda : self.onAnalysis(wizards.SegmentGroupIntegrationWiz, SegmentGroupIntegrationAnalysis), None),
+				('Segment Grouping',          lambda : self.onAnalysis(wizards.SegmentGroupingWiz,         analyses.SegmentGroupingAnalysis),         None),
+				('Segment Group Integration', lambda : self.onAnalysis(wizards.SegmentGroupIntegrationWiz, analyses.SegmentGroupIntegrationAnalysis), None),
 			]
 
 		if ENABLE_MAP_TOOLS:

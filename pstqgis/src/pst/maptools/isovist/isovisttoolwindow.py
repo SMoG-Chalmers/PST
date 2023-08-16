@@ -36,6 +36,7 @@ from qgis.PyQt.QtGui import (
 )
 
 from qgis.PyQt.QtWidgets import (
+	QLayout,
 	QWidget,
 	QDialog,
 	QGridLayout,
@@ -51,6 +52,8 @@ from qgis.PyQt.QtWidgets import (
 	QToolButton,
 	QMenu,
 	QAction,
+	QListWidget,
+	QListWidgetItem,
 )
 
 from qgis.core import (
@@ -89,6 +92,40 @@ def layerFromId(id):
 	return None
 
 
+class MultiSelListDialog(QDialog):
+	def __init__(self, parent, title, items):  # items = [(text, checked)..]
+		QWidget.__init__(self, parent, Qt.Tool)
+		self.setWindowTitle(title)
+		vlayout = QVBoxLayout()
+		self._list = QListWidget(self)
+		for text, checked in items:
+			item = QListWidgetItem(text, self._list)
+			item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+			item.setCheckState(Qt.Checked if checked else Qt.Unchecked)
+			self._list.addItem(item)
+		vlayout.addWidget(self._list)
+		vlayout.addSpacing(10)
+		hlayout = QHBoxLayout()
+		self._okButton = QPushButton("OK")
+		self._okButton.clicked.connect(self.accept)
+		hlayout.addWidget(self._okButton)
+		self._cancelButton = QPushButton("Cancel")
+		self._cancelButton.clicked.connect(self.reject)
+		hlayout.addWidget(self._cancelButton)
+		vlayout.addLayout(hlayout)
+		self.setLayout(vlayout)
+
+	def selectedIndices(self):
+		return [index for index in range(self._list.count()) if self._list.item(index).checkState() == Qt.Checked]
+
+	def _onOk(self):
+		pass
+
+	def _onCancel(self):
+		pass
+
+
+
 class IsovistToolWindow(QWidget):
 	# Signals
 	close = QtCore.pyqtSignal()
@@ -102,7 +139,8 @@ class IsovistToolWindow(QWidget):
 	opacitySelected = QtCore.pyqtSignal(int)
 	addToPointLayer = QtCore.pyqtSignal(QgsVectorLayer)
 	addToPolygonLayer = QtCore.pyqtSignal(QgsVectorLayer)
-	obstacleLayerSelected = QtCore.pyqtSignal(QgsVectorLayer)
+	obstacleLayersSelected = QtCore.pyqtSignal(list)
+	attractionLayersSelected = QtCore.pyqtSignal(list)
 
 	def __init__(self, parent):
 		QWidget.__init__(self, parent, Qt.Tool)
@@ -118,6 +156,8 @@ class IsovistToolWindow(QWidget):
 		self.direction = 0
 		self._color = DEFAULT_QCOLOR_INSIDE
 		self._opacity = DEFAULT_OPACITY
+		self._obstacleLayers = []
+		self._attractionLayers = []
 
 		vlayout = QVBoxLayout()
 
@@ -132,7 +172,7 @@ class IsovistToolWindow(QWidget):
 		self.setLayout(vlayout)
 
 	def reset(self):
-		self._updateObstacleCombo()
+		pass
 
 	def color(self):
 		return self._color
@@ -161,6 +201,9 @@ class IsovistToolWindow(QWidget):
 	def setArea(self, value):
 		self._setFloatValue(self.editArea, value)
 
+	def setAttractionCount(self, value):
+		self.editAttractionCount.setText(str(value))
+
 	def setColor(self, color):
 		self._color = color
 		self._colorPicker.setColor(color)
@@ -169,14 +212,31 @@ class IsovistToolWindow(QWidget):
 		self._opacity = clamp(value, 0, 255)
 		self._opacitySlider.setValue(self._opacity)
 
-	def setObstacleLayer(self, layer):
-		if layer is not None:
-			layerId = layer.id()
-			for i in range(self._obstacleCombo.count()-1):
-				if self._obstacleCombo.itemData(i+1) == layerId:
-					self._obstacleCombo.setCurrentIndex(i+1)
-					return
-		self._obstacleCombo.setCurrentIndex(0)
+	def setObstacleLayers(self, layers):
+		self._obstacleLayers = list(layers)  # Clone
+		log("setObstacleLayers [%s]" % ', '.join([layer.name() for layer in self._obstacleLayers]))
+		self._updateObstacleLayersText()
+
+	def setAttractionLayers(self, layers):
+		self._attractionLayers = list(layers)  # Clone
+		log("setAttractionLayers [%s]" % ', '.join([layer.name() for layer in self._attractionLayers]))
+		self._updateAttractionLayersText()
+
+	def _updateObstacleLayersText(self):
+		self._updateLayerSelectionLabel(self._obstaclesLabel, self._obstacleLayers)
+
+	def _updateAttractionLayersText(self):
+		self._updateLayerSelectionLabel(self._attractionLabel, self._attractionLayers)
+
+	def _updateLayerSelectionLabel(self, label, layers):
+		layer_count = len(layers)
+		if 0 == layer_count:
+			text = 'None'
+		elif 1 == layer_count:
+			text = layers[0].name()
+		else:
+			text = '%d layers' % layer_count
+		label.setText(text)
 
 	def _createFields(self):
 		glayout = QGridLayout()
@@ -190,6 +250,7 @@ class IsovistToolWindow(QWidget):
 		self.editX = self._createEditField("X", None, glayout, changedSlot = self.onPositionChanged)
 		self.editY = self._createEditField("Y", None, glayout, changedSlot = self.onPositionChanged)
 		self.editArea = self._createEditField("Area", "m2", glayout, readOnly = True)
+		self.editAttractionCount = self._createEditField("Attractions", None, glayout, readOnly = True)
 		
 		self._colorPicker = ColorPicker(self, self._color)
 		self._colorPicker.colorChanged.connect(lambda color: self.onColorChanged(color, True))
@@ -205,29 +266,42 @@ class IsovistToolWindow(QWidget):
 		self._opacitySlider.valueChanged.connect(lambda value: self.onOpacityChanged(value, False))
 		self._addField("Opacity", self._opacitySlider, None, glayout)
 
-		self._obstacleCombo = QComboBox(self)
-		self._updateObstacleCombo()
-		self._obstacleCombo.currentIndexChanged.connect(self._onObstacleComboIndexChanged)
-		self._addField("Obstacles", self._obstacleCombo, None, glayout)
-		
-		return glayout
+		self._obstaclesLabel = QLabel()
+		self._obstaclesButton = QToolButton()
+		self._obstaclesButton.setText("...")
+		self._obstaclesButton.clicked.connect(self._onObstaclesClick)		
+		obstacleFieldLayout = QHBoxLayout()
+		obstacleFieldLayout.addWidget(self._obstaclesLabel)
+		obstacleFieldLayout.addStretch()
+		obstacleFieldLayout.addWidget(self._obstaclesButton)
+		self._addField("Obstacles", obstacleFieldLayout, None, glayout)
+		self._updateObstacleLayersText()
 
-	def _updateObstacleCombo(self):
-		self._obstacleCombo.clear()
-		self._obstacleCombo.addItem("- None -")
-		for layer in allPolygonLayers():
-			self._obstacleCombo.addItem(layer.name(), layer.id())
-		self._obstacleCombo.setCurrentIndex(0)
+		self._attractionLabel = QLabel()
+		self._attractionButton = QToolButton()
+		self._attractionButton.setText("...")
+		self._attractionButton.clicked.connect(self._onAttractionsClick)		
+		attractionFieldLayout = QHBoxLayout()
+		attractionFieldLayout.addWidget(self._attractionLabel)
+		attractionFieldLayout.addStretch()
+		attractionFieldLayout.addWidget(self._attractionButton)
+		self._addField("Attractions", attractionFieldLayout, None, glayout)
+		self._updateAttractionLayersText()
+
+		return glayout
 
 	def _createEditField(self, name, unit, glayout, changedSlot = None, readOnly = False):
 		edit = self._createLineEdit(0, changedSlot = changedSlot, readOnly = readOnly)
 		self._addField(name, edit, unit, glayout)
 		return edit
 
-	def _addField(self, name, widget, unit, glayout):
+	def _addField(self, name, widgetOrLayout, unit, glayout):
 		row = glayout.rowCount()
 		glayout.addWidget(QLabel(name), row, 0)
-		glayout.addWidget(widget, row, 1)
+		if isinstance(widgetOrLayout, QLayout):
+			glayout.addLayout(widgetOrLayout, row, 1)
+		else:
+			glayout.addWidget(widgetOrLayout, row, 1)
 		if unit:
 			glayout.addWidget(QLabel(unit), row, 2)
 
@@ -256,14 +330,28 @@ class IsovistToolWindow(QWidget):
 
 		return hlayout
 
-	def _onObstacleComboIndexChanged(self, index):
-		layer = None
-		layerId = self._obstacleCombo.currentData()
-		if layerId is not None:
-			layer = layerFromId(layerId)
-			if layer is None:
-				raise Exception("Couldn't look up layer from id '%s'" % layerId)
-		self.obstacleLayerSelected.emit(layer)
+	def _onObstaclesClick(self):
+		selectedLayers = self._selectLayers("Please select obstacles", allPolygonLayers(), self._obstacleLayers)
+		if selectedLayers is None:
+			return
+		self.setObstacleLayers(selectedLayers)
+		self.obstacleLayersSelected.emit(selectedLayers)
+
+	def _onAttractionsClick(self):
+		selectedLayers = self._selectLayers("Please select attractions", allPointLayers(), self._attractionLayers)
+		if selectedLayers is None:
+			return
+		self.setAttractionLayers(selectedLayers)
+		self.attractionLayersSelected.emit(selectedLayers)
+
+	def _selectLayers(self, text, availableLayers, selectedLayers):
+		items = ([(layer.name(), layer in selectedLayers) for layer in availableLayers])
+		dlg = MultiSelListDialog(self, text, items)
+		if QDialog.Accepted != dlg.exec():
+			return None
+		selectedIndices = dlg.selectedIndices()
+		selectedLayers = [availableLayers[index] for index in selectedIndices]
+		return selectedLayers
 
 	@QtCore.pyqtSlot()
 	def _onAddToPointLayer(self):

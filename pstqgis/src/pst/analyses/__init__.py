@@ -26,6 +26,7 @@ from .attractionbetweennessanalysis import AttractionBetweennessAnalysis
 from .attractiondistanceanalysis import AttractionDistanceAnalysis
 from .attractionreachanalysis import AttractionReachAnalysis
 from .base import AnalysisException
+from .compareresultsanalysis import CompareResultsAnalysis
 from .createsegmentmapanalysis import CreateSegmentMapAnalysis
 from .createjunctionsanalysis import CreateJunctionsAnalysis
 from .isovistanalysis import IsovistAnalysis

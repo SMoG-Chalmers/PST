@@ -25,6 +25,7 @@ from .angularintegrationwiz import AngularIntegrationWiz
 from .attractionbetweennesswiz import AttractionBetweennessWiz
 from .attractiondistancewiz import AttractionDistanceWiz
 from .attractionreachwiz import AttractionReachWiz
+from .compareresultswiz import CompareResultsWiz
 from .createsegmentmapwiz import CreateSegmentMapWiz
 from .createjunctionswiz import CreateJunctionsWiz
 from .isovistwiz import IsovistWiz

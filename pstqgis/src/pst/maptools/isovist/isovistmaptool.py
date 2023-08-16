@@ -118,9 +118,11 @@ class IsovistMapTool(QgsMapTool):
 		self.model = model
 		self.isovistContext = None
 		self.isovistHandle = None
-		self._currentObstacleLayer = None
+		self._currentObstacleLayers = []
+		self._currentAttractionLayers = []
 		self._toolWindow = None
 		self._area = 0
+		self._attractionCount = 0
 		QgsMapTool.__init__(self, canvas)
 
 	#def flags(self):
@@ -169,8 +171,8 @@ class IsovistMapTool(QgsMapTool):
 		else:
 			self._toolWindow = self._createToolWindow()
 
-		self._currentObstacleLayer = None
-		self.setObstacleLayer(None)  # self._tryAutoChooseObstacleLayer()
+		self._currentObstacleLayers = []
+		self._recreateIsovistContext()
 
 		self._toolWindow.show()
 
@@ -189,10 +191,12 @@ class IsovistMapTool(QgsMapTool):
 		self._toolWindow.setFov(viewCone.fieldOfView())
 		self._toolWindow.setDirection(viewCone.viewDirection())
 		self._toolWindow.setArea(self._area)
+		self._toolWindow.setAttractionCount(self._attractionCount)
 		color = viewCone.color()
 		self._toolWindow.setColor(QColor(color.red(), color.green(), color.blue()))
 		self._toolWindow.setOpacity(color.alpha())
-		self._toolWindow.setObstacleLayer(self._currentObstacleLayer)
+		#self._toolWindow.setObstacleLayers(self._currentObstacleLayers)
+		#self._toolWindow.setAttractionLayers(self._currentAttractionLayers)
 
 	def _polygonLayers(self):
 		return [layer for layer in self._layers() if layer.type() == QgsMapLayerType.VectorLayer and layer.geometryType() == QgsWkbTypes.PolygonGeometry]
@@ -200,25 +204,41 @@ class IsovistMapTool(QgsMapTool):
 	def _layers(self):
 		return QgsProject.instance().mapLayers().values()
 
-	def _createIsovistContext(self, obstacle_table, progressContext = None):
+	def _createIsovistContext(self, obstacle_tables, attraction_tables, progressContext = None):
 		# Load pstalgo here when it is needed instead of on plugin load
 		if not self.pstalgo:
 			import pstalgo
 			self.pstalgo = pstalgo
 		initial_alloc_state = stack_allocator.state()
 		try:
-			if obstacle_table:
+			# Obstacles
+			if obstacle_tables:
 				# Read Polygons
-				max_polygon_count = self.model.rowCount(obstacle_table.name())
+				max_polygon_count = 0
+				for table in obstacle_tables:
+					max_polygon_count += self.model.rowCount(table.name())
 				point_count_per_polygon = self.pstalgo.Vector(ctypes.c_uint, max_polygon_count, stack_allocator)
-				polygon_points = self.model.readPolygons(obstacle_table.name(), point_count_per_polygon, progress=progressContext)
+				polygon_points = None
+				for table in obstacle_tables:
+					polygon_points = self.model.readPolygons(table.name(), point_count_per_polygon, progress=progressContext, out_coords = polygon_points)
 			else:
 				point_count_per_polygon = self.pstalgo.Vector(ctypes.c_uint, 0, stack_allocator)
 				polygon_points = self.pstalgo.Vector(ctypes.c_double, 0, stack_allocator)
+			# Attractions
+			if attraction_tables:
+				# Read Points
+				max_count = 0
+				for table in attraction_tables:
+					max_count += self.model.rowCount(table.name())
+				attraction_coords = self.pstalgo.Vector(ctypes.c_double, max_count * 2, stack_allocator)
+				for table in attraction_tables:
+					self.model.readPoints(table.name(), attraction_coords, out_rowids=None, progress=progressContext)
+			else:
+				attraction_coords = self.pstalgo.Vector(ctypes.c_double, 0, stack_allocator)
 			if progressContext:
 				progressContext.setProgress(1)
 			# Create context
-			isovistContext = self.pstalgo.CreateIsovistContext(point_count_per_polygon, polygon_points)
+			isovistContext = self.pstalgo.CreateIsovistContext(point_count_per_polygon, polygon_points, attraction_coords)
 			return isovistContext
 		finally:
 			stack_allocator.restore(initial_alloc_state)
@@ -232,7 +252,7 @@ class IsovistMapTool(QgsMapTool):
 		viewCone = self.currentItem()
 		if not viewCone:
 			return
-		(point_count, points, self.isovistHandle, self._area) = self.pstalgo.CalculateIsovist(
+		(point_count, points, self.isovistHandle, self._area, self._attractionCount) = self.pstalgo.CalculateIsovist(
 			self.isovistContext, 
 			originX, originY, 
 			viewCone.maxViewDistance(), 
@@ -241,6 +261,7 @@ class IsovistMapTool(QgsMapTool):
 			ISOVIST_PERIMETER_RESOLUTION)
 		if self._toolWindow:
 			self._toolWindow.setArea(self._area)
+			self._toolWindow.setAttractionCount(self._attractionCount)
 		viewCone.setPolygonPoints(points, point_count)
 
 	def _freeIsovist(self):
@@ -259,13 +280,14 @@ class IsovistMapTool(QgsMapTool):
 		self._removeAllItems()
 		self._freeIsovist()
 		self._freeIsovistContext()
+		self._currentObstacleLayers = []
+		self._currentAbstractionLayers = []
 		super().deactivate()
 
 	def _freeIsovistContext(self):
 		if self.isovistContext != None:
 			self.pstalgo.Free(self.isovistContext)
 			self.isovistContext = None
-		self._currentObstacleLayer = None
 
 	def _createToolWindow(self):
 		toolWindow = IsovistToolWindow(self.iface.mainWindow())
@@ -280,7 +302,8 @@ class IsovistMapTool(QgsMapTool):
 		toolWindow.opacitySelected.connect(lambda value: self.onWndOpacityChanged(value, False))
 		toolWindow.addToPointLayer.connect(self.addToPointLayer)
 		toolWindow.addToPolygonLayer.connect(self.addToPolygonLayer)
-		toolWindow.obstacleLayerSelected.connect(self.setObstacleLayer)
+		toolWindow.obstacleLayersSelected.connect(self.setObstacleLayers)
+		toolWindow.attractionLayersSelected.connect(self.setAttractionLayers)
 		return toolWindow
 
 	def onWndClose(self):
@@ -433,23 +456,28 @@ class IsovistMapTool(QgsMapTool):
 		QgsProject.instance().addMapLayer(layer)
 		return layer
 
-	def setObstacleLayer(self, layer):
-		if self.isovistContext and self._currentObstacleLayer == layer:
-			return
+	def setObstacleLayers(self, layers):
+		self._currentObstacleLayers = list(layers)  # Clone
+		self._recreateIsovistContext()
+
+	def setAttractionLayers(self, layers):
+		self._currentAttractionLayers = list(layers)  # Clone
+		self._recreateIsovistContext()
+
+	def _recreateIsovistContext(self):
 		self._freeIsovist()
 		self._freeIsovistContext()
 		
 		progressDialog = None
 		try:		
-			if layer:
-				progressDialog = ProgressDialog(title="Loading obstacle layer", text="Reading table %s..." % layer.name(), parent=self._toolWindow)
+			if self._currentObstacleLayers or self._currentAttractionLayers:
+				progressDialog = ProgressDialog(title="Loading obstacle layers", text="Reading tables...", parent=self._toolWindow)
 				progressDialog.open()
-			self.isovistContext = self._createIsovistContext(layer, progressDialog)
+			self.isovistContext = self._createIsovistContext(self._currentObstacleLayers, self._currentAttractionLayers, progressDialog)
 		finally:
 			if progressDialog:
 				progressDialog.close()
 
-		self._currentObstacleLayer = layer
 		viewCone = self.currentItem()
 		if viewCone is None:
 			viewCone = self.createViewCone(123, QgsPointXY(self.originX, self.originY), 100, 360, 0)
