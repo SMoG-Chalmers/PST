@@ -40,3 +40,16 @@ inline bool TestAABBFullyInsideCircle(const TVec2<T>& bb_center, const TVec2<T>&
 bool TestAABBOBBOverlap(const CRectf& aabb, const float2& center, const float2& half_size, const float2& orientation);
 
 bool TestAABBCapsuleOverlap(const CRectf& aabb, const float2& p0, const float2 p1, float radius);
+
+template <typename T>
+T DistanceFromPointToLineSegmentSqrd(const TVec2<T>& pt, const std::pair<TVec2<T>, TVec2<T>>& line, float line_length, const TVec2<T>& line_tangent)
+{
+	const auto localPos = pt - line.first;
+	const auto t = dot(line_tangent, localPos);
+	auto d = localPos.x * line_tangent.y - localPos.y * line_tangent.x;
+	d *= d;
+	d += (float)((t < 0) | (t > line_length)) * std::numeric_limits<T>::max();
+	d = std::min(d, localPos.getLengthSqr());
+	return std::min(d, (pt - line.second).getLengthSqr());
+}
+

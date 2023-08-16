@@ -124,6 +124,40 @@ inline float SyntaxAngleWeightFromDegrees(T degrees)
 	return (1.0f / 90.0f) * (float)degrees;
 }
 
+template <typename TOut, typename TIn>
+const TOut SignVal(TIn value)
+{
+	return (TOut)(v >= 0) - (TOut)(v < 0)
+}
+
+// Like atan2(y, x) but angle is in range [0..4] and with non-linear distribution.
+// Measured to be about 5-6x faster than atan2 on x64 (and about 100x on x86!).
+template <typename T>
+T DiamondAngleFromVector(const TVec2<T>& v)
+{
+	if (v.y >= 0)
+		return (v.x >= 0 ? v.y / (v.x + v.y) : (T)1 - v.x / (-v.x + v.y));
+	else
+		return (v.x < 0 ? (T)2 - v.y / (-v.x - v.y) : (T)3 + v.x / (v.x - v.y));
+}
+
+// Like atan2(y, x) but angle is in range [-4,4] and distribution is nonlinear.
+// Measured to be about 5x faster than atan2 with floats.
+/*
+template <typename T>
+inline float DiamondAngleFromNormalizedVector(const TVec2<T>& v)
+{
+	return abs(v.x) < abs(v.y) ?
+		(v.y < 0 ? -(T)2 : (T)2) - v.x / v.y :
+		v.y / v.x + (v.x < 0) * ((v.y < 0) ? (T)-4 : (T)4);
+}
+
+template <typename T>
+inline float DiamondAngleFromVector(const TVec2<T>& v)
+{
+	return DiamondAngleFromNormalizedVector(v.normalized());
+}
+*/
 
 
 ///////////////////////////////////////////////////////////////////////////////

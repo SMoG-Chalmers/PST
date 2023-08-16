@@ -52,6 +52,18 @@
     <Filter Include="src\utils">
       <UniqueIdentifier>{e4df9ba2-efeb-11e9-82b4-e03f4947909d}</UniqueIdentifier>
     </Filter>
+    <Filter Include="include\pstalgo\math">
+      <UniqueIdentifier>{fa7ca44f-0e87-40b3-b858-7f3e989cde15}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\math">
+      <UniqueIdentifier>{fa36ccb4-223e-47a3-9198-5de5e71daa0d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\gfx">
+      <UniqueIdentifier>{3d9b3172-71cc-44c9-af29-ae9c15a8a3ba}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\pstalgo\gfx">
+      <UniqueIdentifier>{70dac816-cf8f-4601-8316-bb5380698c7c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\pstalgo\analyses\AngularChoice.h">
@@ -231,6 +243,36 @@
     <ClInclude Include="..\include\pstalgo\geometry\Plane2D.h">
       <Filter>include\pstalgo\geometry</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\pstalgo\analyses\VisualConnectivity.h">
+      <Filter>include\pstalgo\analyses</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\Raster.h">
+      <Filter>include\pstalgo</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\geometry\SignedDistanceField.h">
+      <Filter>include\pstalgo\geometry</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\utils\Arr2d.h">
+      <Filter>include\pstalgo\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\analyses\CreateBufferPolygons.h">
+      <Filter>include\pstalgo\analyses</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\math\Gaussian.h">
+      <Filter>include\pstalgo\math</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\math\Integral.h">
+      <Filter>include\pstalgo\math</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\gfx\Blur.h">
+      <Filter>include\pstalgo\gfx</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\utils\Concurrency.h">
+      <Filter>include\pstalgo\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pstalgo\utils\Span.h">
+      <Filter>include\pstalgo\utils</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\analyses\AngularChoice.cpp">
@@ -355,6 +397,24 @@
     </ClCompile>
     <ClCompile Include="..\src\analyses\CalculateIsovists.cpp">
       <Filter>src\analyses</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\analyses\VisualConnectivity.cpp">
+      <Filter>src\analyses</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Raster.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\geometry\SignedDistanceField.cpp">
+      <Filter>src\geometry</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\analyses\CreateBufferPolygons.cpp">
+      <Filter>src\analyses</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\math\Gaussian.cpp">
+      <Filter>src\math</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\gfx\Blur.cpp">
+      <Filter>src\gfx</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

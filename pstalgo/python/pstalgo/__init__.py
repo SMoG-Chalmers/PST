@@ -24,6 +24,7 @@ from .attractiondistance import AttractionDistance
 from .attractionreach import AttractionReach, AttractionScoreAccumulationMode, AttractionWeightFunction, AttractionDistributionFunc, AttractionCollectionFunc
 from .calculateisovists import CreateIsovistContext, CalculateIsovist
 from .callbacktest import CallbackTest
+from .createbufferpolygons import CreateBufferPolygons
 from .creategraph import CreateGraph, FreeGraph, GetGraphInfo, GetGraphLineLengths, GetGraphCrossingCoords, CreateSegmentGraph, FreeSegmentGraph, CreateSegmentGroupGraph, FreeSegmentGroupGraph
 from .createjunctions import CreateJunctions
 from .createsegmentmap import CreateSegmentMap
@@ -31,6 +32,7 @@ from .log import ErrorLevel, FormatLogMessage, RegisterLogCallback, UnregisterLo
 from .networkintegration import NetworkIntegration
 from .angularchoice import AngularChoice, AngularChoiceNormalize, AngularChoiceSyntaxNormalize
 from .odbetweenness import ODBetweenness, ODBDestinationMode
+from .raster import RasterFormat, GetRasterData
 from .reach import Reach
 from .segmentbetweenness import SegmentBetweenness, BetweennessNormalize, BetweennessSyntaxNormalize
 from .fastsegmentbetweenness import FastSegmentBetweenness

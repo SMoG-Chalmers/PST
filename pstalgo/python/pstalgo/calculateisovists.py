@@ -29,6 +29,8 @@ class SCreateIsovistContextDesc(Structure) :
 		("m_PolygonCount", c_uint),
 		("m_PointCountPerPolygon", POINTER(c_uint)),
 		("m_PolygonPoints", POINTER(c_double)),
+		("m_AttractionCount", c_uint),
+		("m_AttractionCoords", POINTER(c_double)),
 		("m_ProgressCallback", PSTALGO_PROGRESS_CALLBACK),
 		("m_ProgressCallbackUser", c_void_p),
 	]
@@ -50,6 +52,7 @@ class SCalculateIsovistDesc(Structure) :
 		("m_OutPoints", POINTER(c_double)),
 		("m_OutIsovistHandle", c_void_p),
 		("m_OutArea", c_float),
+		("m_OutAttractionCount", c_uint),
 		("m_ProgressCallback", PSTALGO_PROGRESS_CALLBACK),
 		("m_ProgressCallbackUser", c_void_p),
 	]
@@ -74,12 +77,13 @@ def PSTACalculateIsovist(psta, desc):
 	fn.restype = None
 	return fn(byref(desc))
 
-
 """ The returned context must be freed with call to Free(). """
-def CreateIsovistContext(point_count_per_polygon, polygon_coords, progress_callback = None):
+def CreateIsovistContext(point_count_per_polygon, polygon_coords, attraction_coords = None, progress_callback = None):
 	desc = SCreateIsovistContextDesc()
 	(desc.m_PointCountPerPolygon, desc.m_PolygonCount) = UnpackArray(point_count_per_polygon, 'I')
-	(desc.m_PolygonPoints, n) = UnpackArray(polygon_coords, 'd')
+	desc.m_PolygonPoints = UnpackArray(polygon_coords, 'd')[0]
+	(desc.m_AttractionCoords, n) = UnpackArray(attraction_coords, 'd')
+	desc.m_AttractionCount = int(n / 2)
 	desc.m_ProgressCallback = CreateCallbackWrapper(progress_callback)
 	desc.m_ProgressCallbackUser = c_void_p() 
 	isovist_context = PSTACreateIsovistContext(_DLL, desc)
@@ -100,8 +104,7 @@ def CalculateIsovist(isovist_context, originX, originY, max_view_distance, field
 	desc.m_ProgressCallback = CreateCallbackWrapper(progress_callback)
 	desc.m_ProgressCallbackUser = c_void_p()
 	PSTACalculateIsovist(_DLL, desc)
-	return (desc.m_OutPointCount, desc.m_OutPoints, desc.m_OutIsovistHandle, desc.m_OutArea)
-
+	return (desc.m_OutPointCount, desc.m_OutPoints, desc.m_OutIsovistHandle, desc.m_OutArea, desc.m_OutAttractionCount)
 
 """
 class SCalculateIsovistsDesc(Structure) :

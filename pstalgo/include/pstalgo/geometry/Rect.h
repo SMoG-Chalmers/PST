@@ -62,6 +62,8 @@ public:
 	inline void GrowToIncludePoint(const TVec2<T>& pt) { GrowToIncludePoint(pt.x, pt.y); }
 	inline void GrowToIncludeRect(const TRect& other) { GrowToIncludePoint(other.m_Min); GrowToIncludePoint(other.m_Max); }
 	inline bool Overlaps(const TRect& other) const { return m_Left < other.m_Right && m_Top < other.m_Bottom && m_Right > other.m_Left && m_Bottom > other.m_Top; }
+	inline void Inflate(T amount) { m_Min.x -= amount; m_Min.y -= amount; m_Max.x += amount; m_Max.y += amount; }
+	inline TRect Translated(const TVec2<T>& v) const { return TRect(m_Min + v, m_Max + v); }
 	inline TRect Inflated(T amount) const { return TRect(m_Left - amount, m_Top - amount, m_Right + amount, m_Bottom + amount); }
 	inline TRect Inflated(T left, T top, T right, T bottom) const { return TRect(m_Left - left, m_Top - top, m_Right + right, m_Bottom + bottom); }
 	inline TRect Offsetted(T x, T y) const { return TRect(m_Left + x, m_Top + y, m_Right + x, m_Bottom + y); }
@@ -89,6 +91,16 @@ public:
 			min(a.m_Bottom, b.m_Bottom));
 	}
 	
+	static TRect Union(const TRect& a, const TRect& b)
+	{
+		using namespace std;
+		return TRect(
+			min(a.m_Left, b.m_Left),
+			min(a.m_Top, b.m_Top),
+			max(a.m_Right, b.m_Right),
+			max(a.m_Bottom, b.m_Bottom));
+	}
+
 	inline T PerpendicularDistanceToPoint(int x, int y) const
 	{
 		using namespace std;

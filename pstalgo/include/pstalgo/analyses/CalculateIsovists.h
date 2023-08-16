@@ -28,7 +28,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 struct SCreateIsovistContextDesc 
 {
 	SCreateIsovistContextDesc() : m_Version(VERSION) {}
-
+	
 	// Version
 	static const unsigned int VERSION = 1;
 	unsigned int m_Version;
@@ -36,6 +36,9 @@ struct SCreateIsovistContextDesc
 	unsigned int m_PolygonCount;
 	unsigned int* m_PointCountPerPolygon;
 	double* m_PolygonPoints;
+
+	unsigned int m_AttractionCount;
+	double* m_AttractionCoords;
 
 	// Progress Callback
 	FPSTAProgressCallback m_ProgressCallback;
@@ -67,6 +70,7 @@ struct SCalculateIsovistDesc
 	double* m_OutPoints;
 	psta_handle_t m_OutIsovistHandle;
 	float m_OutArea;
+	unsigned int m_OutAttractionCount;
 
 	// Progress Callback
 	FPSTAProgressCallback m_ProgressCallback;

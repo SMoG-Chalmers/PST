@@ -51,6 +51,7 @@ public:
 	inline TVec2  operator-(const TVec2& v) const  { return TVec2(x - v.x, y - v.y); }
 	inline TVec2  operator+(const TVec2& v) const  { return TVec2(x + v.x, y + v.y); }
 	inline TVec2  operator*(const T t)  const     { return TVec2(x * t, y * t); }
+	inline TVec2  operator*(const TVec2& v)  const { return TVec2(x * v.x, y * v.y); }
 	inline TVec2  operator/(const T t)  const     { return TVec2(x / t, y / t); }
 	inline void  operator+=(const TVec2& t)       { x += t.x; y += t.y; }
 	inline const TVec2& operator*=(T s)           { x *= s; y *= s; return *this; }
@@ -61,6 +62,7 @@ public:
 };
 
 typedef TVec2<int> int2;
+typedef TVec2<unsigned int> uint2;
 typedef TVec2<float> float2;
 typedef TVec2<double> double2;
 

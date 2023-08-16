@@ -53,6 +53,9 @@ namespace psta
 		T* end() { return m_End; }
 		const T* end() const { return m_End; }
 
+		array_view sub_view(size_t first, size_t size) { return array_view(m_Begin + first, size); }
+		const array_view sub_view(size_t first, size_t size) const { return array_view(m_Begin + first, size); }
+
 	private:
 		T* m_Begin;
 		T* m_End;

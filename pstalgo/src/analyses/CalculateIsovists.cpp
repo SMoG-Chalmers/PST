@@ -133,11 +133,12 @@ private:
 	polygon_vector_t m_Polygons;
 	std::vector<float2> m_PolygonPoints;
 
-	typedef LooseBspTree<SPolygon, polygon_vector_t::iterator> tree_t;
+	typedef psta::LooseBspTree<SPolygon, polygon_vector_t::iterator> tree_t;
 	tree_t m_Tree;
 
 	double2 m_WorldOrigin;
 
+	std::vector<float2> m_Attractions;
 	std::vector<Plane2Df> m_ClippingPlanes;
 	std::vector<std::pair<float2, float2>> m_Edges;
 
@@ -177,11 +178,28 @@ CIsovistContext::CIsovistContext(const SCreateIsovistContextDesc& desc, CPSTAlgo
 		total_polygon_point_count += desc.m_PointCountPerPolygon[polygon_index];
 	}
 
+	// Decide origin for local space
+	m_WorldOrigin = double2(0, 0);
+	if (total_polygon_point_count || desc.m_AttractionCount)
+	{
+		CRectd aabb;
+		if (desc.m_AttractionCount)
+		{
+			aabb = CRectd::BBFromPoints((const double2*)desc.m_AttractionCoords, desc.m_AttractionCount);
+			if (total_polygon_point_count)
+			{
+				aabb = CRectd::Union(aabb, CRectd::BBFromPoints((const double2*)desc.m_PolygonPoints, total_polygon_point_count));
+			}
+		}
+		else
+		{
+			aabb = CRectd::BBFromPoints((const double2*)desc.m_PolygonPoints, total_polygon_point_count);
+		}
+		m_WorldOrigin = double2(trunc(aabb.CenterX()), trunc(aabb.CenterY()));
+	}
+
 	if (total_polygon_point_count)
 	{
-		const auto world_aabb = CRectd::BBFromPoints((const double2*)desc.m_PolygonPoints, total_polygon_point_count);
-		m_WorldOrigin = double2(trunc(world_aabb.CenterX()), trunc(world_aabb.CenterY()));
-
 		// Calculate polygon bounding boxes
 		m_Polygons.resize(desc.m_PolygonCount);
 		{
@@ -217,7 +235,13 @@ CIsovistContext::CIsovistContext(const SCreateIsovistContextDesc& desc, CPSTAlgo
 	}
 	else
 	{
-		m_WorldOrigin = double2(0, 0);
+	}
+
+	// Attractions
+	m_Attractions.resize(desc.m_AttractionCount);
+	for (uint32_t i = 0; i < desc.m_AttractionCount; ++i)
+	{
+		m_Attractions[i] = WorldToLocal(((const double2*)desc.m_AttractionCoords)[i]);
 	}
 
 	progress.ReportProgress(1);
@@ -273,7 +297,7 @@ void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProg
 
 				const auto* points = m_PolygonPoints.data() + polygon.FirstPointIndex;
 
-				if (polygon.BB.Contains(origin_local.x, origin_local.y) && TestPointInRing(origin_local, points, polygon.PointCount))
+				if (polygon.BB.Contains(origin_local.x, origin_local.y) && TestPointInRing(origin_local, psta::make_span(points, polygon.PointCount)))
 				{
 					// Origin is inside a polygon
 					done = true;
@@ -354,9 +378,24 @@ void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProg
 	world_isovist.clear();
 	world_isovist.reserve(local_points.size());
 
+	// Translate isovis coordinates to local space (from isovist object space)
+	for (auto& pt : local_points)
+	{
+		pt += origin_local;
+	}
+
+	// Count attractions inside isovist
+	uint32_t attraction_count = 0;
+	for (const auto& pt : m_Attractions)
+	{
+		attraction_count += (uint32_t)TestPointInRing(pt, psta::make_span(local_points));
+	}
+	desc.m_OutAttractionCount = attraction_count;
+
+	// Translate isovist to world coordinates
 	for (auto it = local_points.crbegin(); local_points.crend() != it; ++it)
 	{
-		world_isovist.push_back(LocalToWorld(*it + origin_local));
+		world_isovist.push_back(LocalToWorld(*it));
 	}
 
 	m_LocalIsovistPool.Return(std::move(local_points));
@@ -369,8 +408,27 @@ void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProg
 	progress.ReportProgress(1);
 }
 
+#include <pstalgo/geometry/SignedDistanceField.h>
+
 PSTADllExport psta_handle_t PSTACreateIsovistContext(const SCreateIsovistContextDesc* desc)
 {
+	/*
+	float sdf[] = {
+		3, 2, 1, 2,
+		2, 1, 0, 1,
+		1, 0, 1, 2,
+		2, 1, 2, 3,
+	};
+	auto polys = psta::PolygonsFromSdfGrid(sdf, 0.5f, uint2(4, 4));
+	*/
+
+	/*
+	psta::Arr2d<float> sdf(100, 100);
+	sdf.Clear(std::numeric_limits<float>::max());
+	psta::AddLineSegmentToSdf(sdf, float2(20, 20), float2(40, 30), 10);
+	auto polys = psta::PolygonsFromSdfGrid(sdf, 8);
+	*/
+
 	try {
 		VerifyStructVersion(*desc);
 

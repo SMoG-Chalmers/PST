@@ -23,22 +23,24 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 #include <pstalgo/Types.h>
 #include <pstalgo/Vec2.h>
+#include <pstalgo/utils/Span.h>
 
 double2 PolygonCentroid(const double2* points, uint32 point_count, double& ret_area);
 
 template <class T>
-bool TestPointInRing(const TVec2<T>& point, const TVec2<T>* ring, size_t ring_size)
+bool TestPointInRing(const T& point, const psta::span<T>& ring)
 {
-	if (ring_size < 3)
+	typedef decltype(point.x) scalar_t;
+
+	if (ring.size() < 3)
 	{
 		return false;
 	}
 	int winding_count = 0;
-	auto p0 = ring[ring_size - 1];
-	for (size_t i = 0; i < ring_size; ++i)
+	auto p0 = ring.back();
+	for (const auto& p1 : ring)
 	{
-		const auto& p1 = ring[i];
-		const int crossing_vertical_mask = (int)((p1.x - point.x) * (p0.x - point.x) >= (T)0) - 1;
+		const int crossing_vertical_mask = (int)((p1.x - point.x) * (p0.x - point.x) >= (scalar_t)0) - 1;
 		const auto cross_prod = crp(p0 - point, p1 - p0);
 		const int direction = (cross_prod > 0) - (cross_prod < 0);
 		winding_count += (int)(direction & crossing_vertical_mask);
@@ -48,16 +50,16 @@ bool TestPointInRing(const TVec2<T>& point, const TVec2<T>* ring, size_t ring_si
 }
 
 template <class T>
-bool TestPointInPolygon(const TVec2<T>& point, const TVec2<T>* perimeter, size_t perimeter_size, const TVec2<T>* const* holes, const size_t* hole_sizes, size_t hole_count)
+bool TestPointInPolygon(const TVec2<T>& point, psta::span<TVec2<T>> perimeter, psta::span<psta::span<TVec2<T>>> holes = psta::span<psta::span<TVec2<T>>>())
 {
-	if (!TestPointInRing(point, perimeter, perimeter_size))
+	if (!TestPointInRing(point, perimeter.data(), perimeter_size.size()))
 	{
 		return false;
 	}
 
-	for (size_t hole_index = 0; hole_index < hole_count; ++hole_index)
+	for (const auto& hole : holes)
 	{
-		if (TestPointInRing(point, holes[hole_index], hole_sizes[hole_index]))
+		if (TestPointInRing(point, hole.data(), hole.size()))
 		{
 			return false;
 		}
