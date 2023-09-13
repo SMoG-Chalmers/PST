@@ -54,7 +54,7 @@ struct SCalculateIsovistDesc
 	SCalculateIsovistDesc() : m_Version(VERSION) {}
 
 	// Version
-	static const unsigned int VERSION = 1;
+	static const unsigned int VERSION = 2;
 	unsigned int m_Version;
 
 	psta_handle_t m_IsovistContext;
@@ -71,6 +71,7 @@ struct SCalculateIsovistDesc
 	psta_handle_t m_OutIsovistHandle;
 	float m_OutArea;
 	unsigned int m_OutAttractionCount;
+	unsigned int m_OutVisibleObstacleCount;
 
 	// Progress Callback
 	FPSTAProgressCallback m_ProgressCallback;

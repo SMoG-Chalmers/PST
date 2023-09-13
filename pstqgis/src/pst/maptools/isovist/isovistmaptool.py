@@ -123,6 +123,7 @@ class IsovistMapTool(QgsMapTool):
 		self._toolWindow = None
 		self._area = 0
 		self._attractionCount = 0
+		self._obstacleCount = 0
 		QgsMapTool.__init__(self, canvas)
 
 	#def flags(self):
@@ -192,6 +193,7 @@ class IsovistMapTool(QgsMapTool):
 		self._toolWindow.setDirection(viewCone.viewDirection())
 		self._toolWindow.setArea(self._area)
 		self._toolWindow.setAttractionCount(self._attractionCount)
+		self._toolWindow.setObstacleCount(self._obstacleCount)
 		color = viewCone.color()
 		self._toolWindow.setColor(QColor(color.red(), color.green(), color.blue()))
 		self._toolWindow.setOpacity(color.alpha())
@@ -252,7 +254,7 @@ class IsovistMapTool(QgsMapTool):
 		viewCone = self.currentItem()
 		if not viewCone:
 			return
-		(point_count, points, self.isovistHandle, self._area, self._attractionCount) = self.pstalgo.CalculateIsovist(
+		(point_count, points, self.isovistHandle, self._area, self._attractionCount, self._obstacleCount) = self.pstalgo.CalculateIsovist(
 			self.isovistContext, 
 			originX, originY, 
 			viewCone.maxViewDistance(), 
@@ -262,6 +264,7 @@ class IsovistMapTool(QgsMapTool):
 		if self._toolWindow:
 			self._toolWindow.setArea(self._area)
 			self._toolWindow.setAttractionCount(self._attractionCount)
+			self._toolWindow.setObstacleCount(self._obstacleCount)
 		viewCone.setPolygonPoints(points, point_count)
 
 	def _freeIsovist(self):

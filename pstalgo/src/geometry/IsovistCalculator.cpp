@@ -49,11 +49,18 @@ CIsovistCalculator::CIsovistCalculator()
 {
 }
 
-void CIsovistCalculator::CalculateIsovist(const float2& origin, float fov_deg, float direction_deg, const std::pair<float2, float2>* edges, size_t edge_count, std::vector<float2>& ret_isovist)
+void CIsovistCalculator::CalculateIsovist(
+	const float2& origin, 
+	float fov_deg, 
+	float direction_deg, 
+	const std::pair<float2, float2>* edges, 
+	size_t edge_count, 
+	const uint32_t* edge_count_per_obstacle,
+	size_t obstacle_count,
+	std::vector<float2>& ret_isovist, 
+	size_t& ret_visible_obstacle_count,
+	CBitVector& obstacle_visibility_mask)
 {
-	std::vector<Edge> myedges;
-	myedges.reserve(edge_count);
-
 	m_EdgeEndPoints.clear();
 	m_EdgeEndPoints.reserve(edge_count * 2);
 
@@ -62,57 +69,75 @@ void CIsovistCalculator::CalculateIsovist(const float2& origin, float fov_deg, f
 
 	m_EdgeHeap.clear();
 
+	obstacle_visibility_mask.resize(obstacle_count);
+	obstacle_visibility_mask.clearAll();
+
 	const auto fov_rad = deg2rad(fov_deg);
 	const auto direction_rad = normalizeAngleRad(deg2rad(direction_deg));
 	const auto fov_min_rad = normalizeAngleRad(direction_rad - fov_rad * .5f);
 
-	for (size_t i = 0; i < edge_count; ++i)
 	{
-		const auto& e = edges[i];
-		if ((e.second - e.first).getLengthSqr() < EPSILON)
+		size_t edge_index = 0;
+		for (size_t obstacle_index = 0; obstacle_index < obstacle_count; ++obstacle_index)
 		{
-			continue;
-		}
-		const auto p0 = e.first - origin;
-		const auto p1 = e.second - origin;
-		if (crp(p0, p1) < EPSILON)
-		{
-			continue;  // Not facing origin (assumes polygon is cartesian clockwise)
-		}
-		// a0,a1 € [0..2*PI)
-		const auto a0 = GetPositiveAngleRad(AngleRadFromDirection(p0) - fov_min_rad);
-		const auto a1 = GetPositiveAngleRad(AngleRadFromDirection(p1) - fov_min_rad);
-		if (a0 == a1)
-		{
-			continue;
-		}
-		Edge edge;
-		edge.p0 = p0;
-		edge.p1 = p1;
-		edge.tangent = (p1 - p0).normalized();
-		if (dot(edge.normal(), p0) > -EPSILON)
-		{
-			continue;  // Origin is too close to edge
-		}
-		edge.index = (uint32_t)m_Edges.size();
-		m_EdgeEndPoints.push_back(EdgeEndPoint(edge.index, a0, false));
-		m_EdgeEndPoints.push_back(EdgeEndPoint(edge.index, a1, true));
-		m_HeapIndexFromEdgeIndex.push_back((uint32_t)-1);
-		m_Edges.push_back(edge);
-		if (a0 > a1)
-		{
-			m_EdgeHeap.push(edge);
+			const auto obstacle_edge_count = edge_count_per_obstacle[obstacle_index];
+			for (uint32_t obstacle_edge_index = 0; obstacle_edge_index < obstacle_edge_count; ++obstacle_edge_index)
+			{
+				const auto& e = edges[edge_index++];
+				if ((e.second - e.first).getLengthSqr() < EPSILON)
+				{
+					continue;
+				}
+				const auto p0 = e.first - origin;
+				const auto p1 = e.second - origin;
+				if (crp(p0, p1) < EPSILON)
+				{
+					continue;  // Not facing origin (assumes polygon is cartesian clockwise)
+				}
+				// a0,a1 € [0..2*PI)
+				const auto a0 = GetPositiveAngleRad(AngleRadFromDirection(p0) - fov_min_rad);
+				const auto a1 = GetPositiveAngleRad(AngleRadFromDirection(p1) - fov_min_rad);
+				if (a0 == a1)
+				{
+					continue;
+				}
+				Edge edge;
+				edge.p0 = p0;
+				edge.p1 = p1;
+				edge.tangent = (p1 - p0).normalized();
+				if (dot(edge.normal(), p0) > -EPSILON)
+				{
+					continue;  // Origin is too close to edge
+				}
+				edge.index = (uint32_t)m_Edges.size();
+				edge.obstacle = (uint32_t)obstacle_index;
+				m_EdgeEndPoints.push_back(EdgeEndPoint(edge.index, a0, false));
+				m_EdgeEndPoints.push_back(EdgeEndPoint(edge.index, a1, true));
+				m_HeapIndexFromEdgeIndex.push_back((uint32_t)-1);
+				m_Edges.push_back(edge);
+				if (a0 > a1)
+				{
+					m_EdgeHeap.push(edge);
+				}
+			}
 		}
 	}
 
 	std::sort(m_EdgeEndPoints.begin(), m_EdgeEndPoints.end());
 
-	auto try_add_to_isovist = [&ret_isovist, origin](const float2& pt_local)
+	size_t visible_obstacle_count = 0;
+
+	auto try_add_to_isovist = [&obstacle_visibility_mask, &ret_isovist, origin, &visible_obstacle_count](const float2& pt_local, uint32_t obstacle_index)
 	{
 		const auto pt_world = pt_local + origin;
 		if (ret_isovist.empty() || (pt_world - ret_isovist.back()).getLengthSqr() > 0.001f)
 		{
 			ret_isovist.push_back(pt_world);
+			if (!obstacle_visibility_mask.get(obstacle_index))
+			{
+				++visible_obstacle_count;
+				obstacle_visibility_mask.set(obstacle_index);
+			}
 		}
 	};
 
@@ -128,7 +153,7 @@ void CIsovistCalculator::CalculateIsovist(const float2& origin, float fov_deg, f
 			auto p0 = edge.p0;
 			auto p1 = edge.p1;
 			ClipLineSegment(p0, p1, plane_fov_min);
-			try_add_to_isovist(p0);
+			try_add_to_isovist(p0, edge.obstacle);
 		}
 	}
 
@@ -148,8 +173,9 @@ void CIsovistCalculator::CalculateIsovist(const float2& origin, float fov_deg, f
 			{
 				break;
 			}
-			const auto prev_p1 = m_EdgeHeap.top().p1;
-			try_add_to_isovist(prev_p1);
+			const auto& edge = m_EdgeHeap.top();
+			const auto prev_p1 = edge.p1;
+			try_add_to_isovist(prev_p1, edge.obstacle);
 			m_EdgeHeap.pop();
 			if (!m_EdgeHeap.empty())
 			{
@@ -161,7 +187,7 @@ void CIsovistCalculator::CalculateIsovist(const float2& origin, float fov_deg, f
 					const auto dist_from_next_along_normal = dot(normal, prev_p1 - next_edge.p0);
 					const auto p1_normalized = prev_p1.normalized();
 					const auto p = prev_p1 - (p1_normalized * (dist_from_next_along_normal / dot(p1_normalized, normal)));
-					try_add_to_isovist(p);
+					try_add_to_isovist(p, next_edge.obstacle);
 				}
 			}
 		}
@@ -174,7 +200,7 @@ void CIsovistCalculator::CalculateIsovist(const float2& origin, float fov_deg, f
 			const auto& edge = m_Edges[pt.EdgeIndex()];
 			if (m_EdgeHeap.empty())
 			{
-				try_add_to_isovist(edge.p0);
+				try_add_to_isovist(edge.p0, edge.obstacle);
 				m_EdgeHeap.push(edge);
 			}
 			else
@@ -190,10 +216,10 @@ void CIsovistCalculator::CalculateIsovist(const float2& origin, float fov_deg, f
 						const auto dist_from_prev_along_normal = dot(normal, edge.p0 - prev_edge.p0);
 						const auto p0_normalized = edge.p0.normalized();
 						const auto p = edge.p0 - (p0_normalized * (dist_from_prev_along_normal / dot(p0_normalized, normal)));
-						try_add_to_isovist(p);
+						try_add_to_isovist(p, edge.obstacle);
 					}
 					// Add p0 of new edge to isovist
-					try_add_to_isovist(edge.p0);
+					try_add_to_isovist(edge.p0, edge.obstacle);
 				}
 			}
 		}
@@ -208,8 +234,10 @@ void CIsovistCalculator::CalculateIsovist(const float2& origin, float fov_deg, f
 		auto p0 = edge.p0;
 		auto p1 = edge.p1;
 		ClipLineSegment(p0, p1, plane_fov_min);
-		try_add_to_isovist(p1);
+		try_add_to_isovist(p1, edge.obstacle);
 	}
+
+	ret_visible_obstacle_count = visible_obstacle_count;
 
 	m_EdgeHeap.clear();
 	m_HeapIndexFromEdgeIndex.clear();

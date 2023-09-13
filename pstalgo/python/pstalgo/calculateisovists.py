@@ -53,12 +53,13 @@ class SCalculateIsovistDesc(Structure) :
 		("m_OutIsovistHandle", c_void_p),
 		("m_OutArea", c_float),
 		("m_OutAttractionCount", c_uint),
+		("m_OutVisibleObstacleCount", c_uint),
 		("m_ProgressCallback", PSTALGO_PROGRESS_CALLBACK),
 		("m_ProgressCallbackUser", c_void_p),
 	]
 	def __init__(self, *args):
 		Structure.__init__(self, *args)
-		self.m_Version = 1
+		self.m_Version = 2
 
 
 def PSTACreateIsovistContext(psta, desc):
@@ -104,7 +105,7 @@ def CalculateIsovist(isovist_context, originX, originY, max_view_distance, field
 	desc.m_ProgressCallback = CreateCallbackWrapper(progress_callback)
 	desc.m_ProgressCallbackUser = c_void_p()
 	PSTACalculateIsovist(_DLL, desc)
-	return (desc.m_OutPointCount, desc.m_OutPoints, desc.m_OutIsovistHandle, desc.m_OutArea, desc.m_OutAttractionCount)
+	return (desc.m_OutPointCount, desc.m_OutPoints, desc.m_OutIsovistHandle, desc.m_OutArea, desc.m_OutAttractionCount, desc.m_OutVisibleObstacleCount)
 
 """
 class SCalculateIsovistsDesc(Structure) :

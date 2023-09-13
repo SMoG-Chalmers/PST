@@ -204,6 +204,9 @@ class IsovistToolWindow(QWidget):
 	def setAttractionCount(self, value):
 		self.editAttractionCount.setText(str(value))
 
+	def setObstacleCount(self, value):
+		self.editObstacleCount.setText(str(value))
+
 	def setColor(self, color):
 		self._color = color
 		self._colorPicker.setColor(color)
@@ -251,7 +254,8 @@ class IsovistToolWindow(QWidget):
 		self.editY = self._createEditField("Y", None, glayout, changedSlot = self.onPositionChanged)
 		self.editArea = self._createEditField("Area", "m2", glayout, readOnly = True)
 		self.editAttractionCount = self._createEditField("Attractions", None, glayout, readOnly = True)
-		
+		self.editObstacleCount = self._createEditField("Obstacles", None, glayout, readOnly = True)
+
 		self._colorPicker = ColorPicker(self, self._color)
 		self._colorPicker.colorChanged.connect(lambda color: self.onColorChanged(color, True))
 		self._colorPicker.colorSelected.connect(lambda color: self.onColorChanged(color, False))

@@ -141,6 +141,8 @@ private:
 	std::vector<float2> m_Attractions;
 	std::vector<Plane2Df> m_ClippingPlanes;
 	std::vector<std::pair<float2, float2>> m_Edges;
+	std::vector<uint32_t> m_EdgeCountPerObstacle;
+	CBitVector m_ObstacleVisibilityMask;
 
 	ObjectPool<std::vector<float2>> m_LocalIsovistPool;
 	ObjectPool<std::vector<double2>> m_WorldIsovistPool;
@@ -267,10 +269,13 @@ void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProg
 
 	const float2 origin_local = WorldToLocal(double2(desc.m_OriginX, desc.m_OriginY));
 
+	m_EdgeCountPerObstacle.clear();
+
 	// Clipping planes and edges
 	m_ClippingPlanes.clear();
 	m_Edges.clear();
 	CalculateArcClippingPlanesAndSegments(desc.m_PerimeterSegmentCount, outer_clipping_radius, (float)desc.m_FieldOfViewDegrees, (float)desc.m_DirectionDegrees, m_ClippingPlanes, m_Edges);
+	m_EdgeCountPerObstacle.push_back((uint32_t)m_Edges.size());  // Perimeter is first obstacle
 
 	const auto view_direction_vec = directionVectorfromAngleRad(deg2rad((float)desc.m_DirectionDegrees));
 	const auto view_dir_plane = Plane2Df({ view_direction_vec, 0 });
@@ -318,6 +323,8 @@ void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProg
 
 				const bool needs_clipping = !polygon.BB.FullyInsideCircle(origin_local, inner_clipping_radius);
 
+				const auto prev_edge_count = m_Edges.size();
+
 				auto pt_prev = points[polygon.PointCount - 1] - origin_local;
 				for (uint32_t point_index = 0; point_index < polygon.PointCount; ++point_index)
 				{
@@ -343,6 +350,8 @@ void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProg
 						m_Edges.push_back(edge);
 					}
 				}
+
+				m_EdgeCountPerObstacle.push_back((uint32_t)(m_Edges.size() - prev_edge_count));
 			});
 
 		if (done)
@@ -351,10 +360,17 @@ void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProg
 		}
 	}
 
+	size_t visible_obstacle_count = 0;
 	auto local_points = m_LocalIsovistPool.Borrow();
 	local_points.clear();
-	
-	m_IsovistCalculator.CalculateIsovist(float2(0, 0), (float)desc.m_FieldOfViewDegrees, (float)desc.m_DirectionDegrees, m_Edges.data(), m_Edges.size(), local_points);
+	m_IsovistCalculator.CalculateIsovist(float2(0, 0), (float)desc.m_FieldOfViewDegrees, (float)desc.m_DirectionDegrees, m_Edges.data(), m_Edges.size(), m_EdgeCountPerObstacle.data(), m_EdgeCountPerObstacle.size(), local_points, visible_obstacle_count, m_ObstacleVisibilityMask);
+
+	// Don't include perimeter in object count
+	if (m_ObstacleVisibilityMask.get(0))
+	{
+		m_ObstacleVisibilityMask.clear(0);
+		--visible_obstacle_count;
+	}
 
 	// Calculate area
 	double area = 0;
@@ -404,6 +420,7 @@ void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProg
 	desc.m_OutPoints = &world_isovist.data()->x;
 	desc.m_OutIsovistHandle = new Result(*this, std::move(world_isovist));
 	desc.m_OutArea = (float)area;
+	desc.m_OutVisibleObstacleCount = visible_obstacle_count;
 
 	progress.ReportProgress(1);
 }

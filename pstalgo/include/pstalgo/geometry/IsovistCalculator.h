@@ -23,6 +23,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 #include <vector>
 #include <pstalgo/Vec2.h>
+#include <pstalgo/utils/BitVector.h>
 #include <pstalgo/utils/RefHeap.h>
 
 
@@ -31,7 +32,17 @@ class CIsovistCalculator
 public:
 	CIsovistCalculator();
 
-	void CalculateIsovist(const float2& origin, float fov_deg, float direction_deg, const std::pair<float2, float2>* edges, size_t edge_count, std::vector<float2>& ret_points);
+	void CalculateIsovist(
+		const float2& origin,
+		float fov_deg,
+		float direction_deg,
+		const std::pair<float2, float2>* edges,
+		size_t edge_count,
+		const uint32_t* edge_count_per_obstacle,
+		size_t obstacle_count,
+		std::vector<float2>& ret_isovist,
+		size_t& ret_visible_obstacle_count,
+		CBitVector& obstacle_visibility_mask);
 
 private:
 	struct EdgeEndPoint
@@ -65,7 +76,7 @@ private:
 		float2 p1;
 		float2 tangent;
 		uint32_t index;
-		uint32_t _reserved;
+		uint32_t obstacle;
 
 		inline float2 normal() const { return float2(-tangent.y, tangent.x); }
 
