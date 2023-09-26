@@ -58,6 +58,7 @@ public:
 	inline bool Contains(T x, T y) const { return (x >= m_Left) && (y >= m_Top) && (x < m_Right) && (y < m_Bottom); }
 	inline bool OverlapsCircle(const TVec2<T>& center, float radius) const { return TestAABBCircleOverlap(Center(), Size() * .5f, center, radius); }
 	inline bool FullyInsideCircle(const TVec2<T>& center, float radius) const { return TestAABBFullyInsideCircle(Center(), Size() * .5f, center, radius); }
+	inline bool IsFullyInside(const TRect& r) const { return m_Min.x >= r.m_Min.x && m_Min.y >= r.m_Min.y && m_Max.x <= r.m_Max.x && m_Max.y <= r.m_Max.y; }
 	inline void GrowToIncludePoint(T x, T y) { if (x < m_Left) m_Left = x; if (y < m_Top) m_Top = y; if (x > m_Right) m_Right = x; if (y > m_Bottom) m_Bottom = y; }
 	inline void GrowToIncludePoint(const TVec2<T>& pt) { GrowToIncludePoint(pt.x, pt.y); }
 	inline void GrowToIncludeRect(const TRect& other) { GrowToIncludePoint(other.m_Min); GrowToIncludePoint(other.m_Max); }
@@ -68,7 +69,9 @@ public:
 	inline TRect Inflated(T left, T top, T right, T bottom) const { return TRect(m_Left - left, m_Top - top, m_Right + right, m_Bottom + bottom); }
 	inline TRect Offsetted(T x, T y) const { return TRect(m_Left + x, m_Top + y, m_Right + x, m_Bottom + y); }
 	inline bool IsEmpty() const { return m_Right <= m_Left || m_Bottom <= m_Top; }
-	
+	inline bool Valid() const { return m_Right >= m_Left && m_Bottom >= m_Top; }
+	inline bool Invalid() const { return !Valid(); }
+
 	inline TRect operator-(const TVec2<T>& rhs) const { return TRect(m_Min - rhs, m_Max - rhs); }
 
 	inline static TRect BBFromPoints(const TVec2<T>* coords, unsigned int count)
@@ -130,6 +133,7 @@ public:
 	ALLOW_NAMELESS_STRUCT_END
 
 	static const TRect EMPTY;
+	static const TRect INVALID;
 };
 
 template <typename T>
@@ -151,6 +155,7 @@ TRect<T>::TRect(TIterator beg, TIterator end)
 }
 
 template <typename T> const TRect<T> TRect<T>::EMPTY(0, 0, 0, 0);
+template <typename T> const TRect<T> TRect<T>::INVALID(std::numeric_limits<T>::max(), std::numeric_limits<T>::max(), std::numeric_limits<T>::lowest(), std::numeric_limits<T>::lowest());
 
 typedef TRect<int> CRecti;
 typedef TRect<float> CRectf;

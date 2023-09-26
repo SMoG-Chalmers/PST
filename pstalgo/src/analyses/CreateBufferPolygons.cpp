@@ -317,7 +317,7 @@ namespace psta
 
 		typedef std::pair<double2, double2> line_t;
 
-		const bool use_decay = false;
+		const bool use_decay = true;
 		if (use_decay)
 		{
 			auto raster_lines = [&](const line_t* lines, const float* intensities, size_t count, float multiplier)

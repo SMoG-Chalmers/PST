@@ -41,8 +41,7 @@ public:
 		const uint32_t* edge_count_per_obstacle,
 		size_t obstacle_count,
 		std::vector<float2>& ret_isovist,
-		size_t& ret_visible_obstacle_count,
-		CBitVector& obstacle_visibility_mask);
+		bit_vector<>& obstacle_visibility_mask);
 
 private:
 	struct EdgeEndPoint

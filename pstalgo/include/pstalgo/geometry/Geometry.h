@@ -53,3 +53,30 @@ T DistanceFromPointToLineSegmentSqrd(const TVec2<T>& pt, const std::pair<TVec2<T
 	return std::min(d, (pt - line.second).getLengthSqr());
 }
 
+template <class T>
+inline bool TestLineSegmentAndCircleOverlap(const TVec2<T>& p0, const TVec2<T>& p1, T radius, T radius_sqrd = radius * radius)
+{
+	if (p0.getLengthSqr() < radius_sqrd || p1.getLengthSqr() < radius_sqrd)
+	{
+		return true;
+	}
+
+	const auto line_v = p1 - p0;
+	const auto line_length = line_v.getLength();
+	if (line_length == 0)
+	{
+		return false;
+	}
+	const auto line_tangent = line_v * ((T)1 / line_length);
+	const TVec2<T> line_normal(line_tangent.y, -line_tangent.x);
+
+	const float dist = dot(p0, line_normal);
+	if (dist*dist >= radius_sqrd)
+	{
+		return false;
+	}
+
+	const auto at = dot(line_tangent, p0);
+
+	return at > -line_length && at < 0;
+}

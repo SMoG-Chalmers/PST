@@ -20,6 +20,11 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 """
 
 from qgis.PyQt.QtCore import QVariant
+from qgis.core import (
+		QgsMapLayerType,
+		QgsVectorLayer,
+		QgsWkbTypes,
+)
 
 FIELD_NAME_X            = 'x'
 FIELD_NAME_Y            = 'y'
@@ -43,3 +48,16 @@ POLYGON_FIELDS = [
 	(FIELD_NAME_DIRECTION,    QVariant.Double),
 	(FIELD_NAME_AREA,         QVariant.Double),
 ]
+
+def isPointLayer(layer):
+	return layer.type() == QgsMapLayerType.VectorLayer and layer.geometryType() == QgsWkbTypes.PointGeometry
+
+def isPolygonLayer(layer):
+	return layer.type() == QgsMapLayerType.VectorLayer and layer.geometryType() == QgsWkbTypes.PolygonGeometry
+
+class IsovistLayer:
+	def __init__(self, qgisLayer, obstacle):
+		self.qgisLayer = qgisLayer
+		self.obstacle = obstacle
+		self.featureIds = None
+		self.canvasItemsByIndex = {}

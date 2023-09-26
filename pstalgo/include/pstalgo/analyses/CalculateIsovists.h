@@ -27,18 +27,35 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 struct SCreateIsovistContextDesc 
 {
+	struct SPolygons
+	{
+		uint32_t  GroupCount;
+		uint32_t* PolygonCountPerGroup;
+		uint32_t* PointCountPerPolygon;
+		double*   Coords;
+
+		uint32_t TotalPolygonCount() const;
+		uint32_t TotalCoordCount() const;
+	};
+
+	struct SPoints
+	{
+		uint32_t  GroupCount;
+		uint32_t* PointCountPerGroup;
+		double*   Coords;
+
+		uint32_t TotalPointCount() const;
+	};
+
 	SCreateIsovistContextDesc() : m_Version(VERSION) {}
 	
 	// Version
-	static const unsigned int VERSION = 1;
+	static const unsigned int VERSION = 2;
 	unsigned int m_Version;
 
-	unsigned int m_PolygonCount;
-	unsigned int* m_PointCountPerPolygon;
-	double* m_PolygonPoints;
-
-	unsigned int m_AttractionCount;
-	double* m_AttractionCoords;
+	SPolygons ObstaclePolygons;
+	SPoints   AttractionPoints;
+	SPolygons AttractionPolygons;
 
 	// Progress Callback
 	FPSTAProgressCallback m_ProgressCallback;
@@ -54,7 +71,7 @@ struct SCalculateIsovistDesc
 	SCalculateIsovistDesc() : m_Version(VERSION) {}
 
 	// Version
-	static const unsigned int VERSION = 2;
+	static const unsigned int VERSION = 4;
 	unsigned int m_Version;
 
 	psta_handle_t m_IsovistContext;
@@ -69,9 +86,20 @@ struct SCalculateIsovistDesc
 	unsigned int m_OutPointCount;
 	double* m_OutPoints;
 	psta_handle_t m_OutIsovistHandle;
+
 	float m_OutArea;
-	unsigned int m_OutAttractionCount;
-	unsigned int m_OutVisibleObstacleCount;
+
+	// Visibility
+	struct SVisibleObjects
+	{
+		uint32_t  ObjectCount;
+		uint32_t  GroupCount;
+		uint32_t* CountPerGroup;
+		uint32_t* Indices;
+	};
+	SVisibleObjects m_OutVisibleObstacles;
+	SVisibleObjects m_OutVisibleAttractionPoints;
+	SVisibleObjects m_OutVisibleAttractionPolygons;
 
 	// Progress Callback
 	FPSTAProgressCallback m_ProgressCallback;

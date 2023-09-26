@@ -27,6 +27,7 @@ from qgis.PyQt.QtGui import (
 		QPen,
 		QPainterPath,
 		QCursor,
+		QPolygonF,
 )
 
 from qgis.PyQt import QtCore
@@ -64,6 +65,7 @@ from ...model import GeometryType
 from ...ui.widgets import ProgressDialog
 from .isovistmapcanvasitem import IsovistMapCanvasItem
 from .isovisttoolwindow import IsovistToolWindow
+from .mapcanvasitems import CircleMapCanvasItem, PolygonMapCanvasItem, PathMapCanvasItem
 
 from .common import (
 	POINT_FIELDS, 
@@ -74,6 +76,9 @@ from .common import (
 	FIELD_NAME_FOV, 
 	FIELD_NAME_DIRECTION, 
 	FIELD_NAME_AREA,
+	isPointLayer, 
+	isPolygonLayer, 
+	IsovistLayer,
 )
 
 
@@ -95,6 +100,16 @@ SETTINGS_ROOT       = "pst/isovisttool/"
 COLOR_SETTING_KEY   = SETTINGS_ROOT + "color"
 OPACITY_SETTING_KEY = SETTINGS_ROOT + "opacity"
 
+OBSTACLE_EDGE_WIDTH = 1
+QCOLOR_OBSTACLE_FILL = QColor("#C04040")
+QCOLOR_OBSTACLE_EDGE = QColor("#400000")
+QCOLOR_ATTRACTION_FILL = QColor("#40C040")
+QCOLOR_ATTRACTION_EDGE = QColor("#000000")
+
+BRUSH_OBSTACLE = QBrush(QCOLOR_OBSTACLE_FILL)
+BRUSH_ATTRACTION = QBrush(QCOLOR_ATTRACTION_FILL)
+PEN_ATTRACTION = QPen(QCOLOR_ATTRACTION_EDGE, 1)
+
 
 def log(msg):
 	if ENABLE_LOGGING:
@@ -104,6 +119,7 @@ def QColorToHtml(color):
 	if color.alpha() == 255:
 		return "#%.2x%.2x%.2x" % (color.red(), color.green(), color.blue())
 	return "#%.2x%.2x%.2x%.2x" % (color.alpha(), color.red(), color.green(), color.blue())
+
 
 class IsovistMapTool(QgsMapTool):
 	def __init__(self, iface, canvas, model):
@@ -118,8 +134,9 @@ class IsovistMapTool(QgsMapTool):
 		self.model = model
 		self.isovistContext = None
 		self.isovistHandle = None
-		self._currentObstacleLayers = []
-		self._currentAttractionLayers = []
+		self._obstacleLayers = []
+		self._attractionPointLayers = []
+		self._attractionPolygonLayers = []
 		self._toolWindow = None
 		self._area = 0
 		self._attractionCount = 0
@@ -172,17 +189,12 @@ class IsovistMapTool(QgsMapTool):
 		else:
 			self._toolWindow = self._createToolWindow()
 
-		self._currentObstacleLayers = []
 		self._recreateIsovistContext()
 
 		self._toolWindow.show()
 
 		QgsMapTool.activate(self)
 		self.setCursor(Qt.ArrowCursor)
-
-	def _tryAutoChooseObstacleLayer(self):
-		layers = self._polygonLayers()
-		return layers[0] if len(layers) == 1 else None
 
 	def _updateToolWindow(self, viewCone):
 		if self._toolWindow is None:
@@ -192,55 +204,70 @@ class IsovistMapTool(QgsMapTool):
 		self._toolWindow.setFov(viewCone.fieldOfView())
 		self._toolWindow.setDirection(viewCone.viewDirection())
 		self._toolWindow.setArea(self._area)
-		self._toolWindow.setAttractionCount(self._attractionCount)
-		self._toolWindow.setObstacleCount(self._obstacleCount)
+		# TODO: Set visibility counters
 		color = viewCone.color()
 		self._toolWindow.setColor(QColor(color.red(), color.green(), color.blue()))
 		self._toolWindow.setOpacity(color.alpha())
-		#self._toolWindow.setObstacleLayers(self._currentObstacleLayers)
-		#self._toolWindow.setAttractionLayers(self._currentAttractionLayers)
 
-	def _polygonLayers(self):
-		return [layer for layer in self._layers() if layer.type() == QgsMapLayerType.VectorLayer and layer.geometryType() == QgsWkbTypes.PolygonGeometry]
-
-	def _layers(self):
-		return QgsProject.instance().mapLayers().values()
-
-	def _createIsovistContext(self, obstacle_tables, attraction_tables, progressContext = None):
+	def _createIsovistContext(self, obstacleLayers, attractionPointLayers, attractionPolygonLayers, progressContext = None):
 		# Load pstalgo here when it is needed instead of on plugin load
+
 		if not self.pstalgo:
 			import pstalgo
 			self.pstalgo = pstalgo
 		initial_alloc_state = stack_allocator.state()
 		try:
-			# Obstacles
-			if obstacle_tables:
-				# Read Polygons
-				max_polygon_count = 0
-				for table in obstacle_tables:
-					max_polygon_count += self.model.rowCount(table.name())
-				point_count_per_polygon = self.pstalgo.Vector(ctypes.c_uint, max_polygon_count, stack_allocator)
-				polygon_points = None
-				for table in obstacle_tables:
-					polygon_points = self.model.readPolygons(table.name(), point_count_per_polygon, progress=progressContext, out_coords = polygon_points)
-			else:
-				point_count_per_polygon = self.pstalgo.Vector(ctypes.c_uint, 0, stack_allocator)
-				polygon_points = self.pstalgo.Vector(ctypes.c_double, 0, stack_allocator)
-			# Attractions
-			if attraction_tables:
-				# Read Points
-				max_count = 0
-				for table in attraction_tables:
-					max_count += self.model.rowCount(table.name())
-				attraction_coords = self.pstalgo.Vector(ctypes.c_double, max_count * 2, stack_allocator)
-				for table in attraction_tables:
-					self.model.readPoints(table.name(), attraction_coords, out_rowids=None, progress=progressContext)
-			else:
-				attraction_coords = self.pstalgo.Vector(ctypes.c_double, 0, stack_allocator)
+			isovistContextGeometry = self.pstalgo.IsovistContextGeometry()
+
+			def ReadPoints(isovistLayers, outPoints):
+				if isovistLayers:
+					point_count_per_group = self.pstalgo.Vector(ctypes.c_uint, len(isovistLayers), stack_allocator)
+					max_point_count = 0
+					for isovistLayer in isovistLayers:
+						max_point_count += self.model.rowCount(isovistLayer.qgisLayer.name())
+					coords = self.pstalgo.Vector(ctypes.c_double, max_point_count * 2, stack_allocator)
+					for isovistLayer in isovistLayers:
+						prevCoordCount = int(len(coords) / 2)
+						isovistLayer.featureIds = []
+						self.model.readPoints(isovistLayer.qgisLayer.name(), coords, out_rowids=isovistLayer.featureIds, progress=progressContext)
+						point_count_per_group.append(int(len(coords) / 2) - prevCoordCount)
+				else:
+					point_count_per_group = None
+					coords = None
+				outPoints.pointCountPerGroup = point_count_per_group
+				outPoints.coords = coords
+
+			def ReadPolygons(isovistLayers, outPolygons):
+				if isovistLayers:
+					polygon_count_per_group = self.pstalgo.Vector(ctypes.c_uint, len(isovistLayers), stack_allocator)
+					max_polygon_count = 0
+					for isovistLayer in isovistLayers:
+						max_polygon_count += self.model.rowCount(isovistLayer.qgisLayer.name())
+					point_count_per_polygon = self.pstalgo.Vector(ctypes.c_uint, max_polygon_count, stack_allocator)
+					polygon_points = None
+					for isovistLayer in isovistLayers:
+						prevPolyCount = len(point_count_per_polygon)
+						isovistLayer.featureIds = []
+						polygon_points = self.model.readPolygons(isovistLayer.qgisLayer.name(), point_count_per_polygon, out_rowids=isovistLayer.featureIds, progress=progressContext, out_coords = polygon_points)
+						polygon_count_per_group.append(len(point_count_per_polygon) - prevPolyCount)
+				else:
+					polygon_count_per_group = None
+					point_count_per_polygon = None
+					polygon_points = None
+				outPolygons.polygonCountPerGroup = polygon_count_per_group
+				outPolygons.pointCountPerPolygon = point_count_per_polygon
+				outPolygons.coords = polygon_points
+
+			ReadPolygons(obstacleLayers, isovistContextGeometry.obstaclePolygons)
+			ReadPoints(attractionPointLayers, isovistContextGeometry.attractionPoints)
+			ReadPolygons(attractionPolygonLayers, isovistContextGeometry.attractionPolygons)
+
 			if progressContext:
 				progressContext.setProgress(1)
+
 			# Create context
-			isovistContext = self.pstalgo.CreateIsovistContext(point_count_per_polygon, polygon_points, attraction_coords)
+			isovistContext = self.pstalgo.CreateIsovistContext(isovistContextGeometry)
+
 			return isovistContext
 		finally:
 			stack_allocator.restore(initial_alloc_state)
@@ -254,7 +281,7 @@ class IsovistMapTool(QgsMapTool):
 		viewCone = self.currentItem()
 		if not viewCone:
 			return
-		(point_count, points, self.isovistHandle, self._area, self._attractionCount, self._obstacleCount) = self.pstalgo.CalculateIsovist(
+		(point_count, points, self.isovistHandle, self._area, visibleObstacles, visibleAttractionPoints, visibleAttractionPolygons) = self.pstalgo.CalculateIsovist(
 			self.isovistContext, 
 			originX, originY, 
 			viewCone.maxViewDistance(), 
@@ -263,9 +290,41 @@ class IsovistMapTool(QgsMapTool):
 			ISOVIST_PERIMETER_RESOLUTION)
 		if self._toolWindow:
 			self._toolWindow.setArea(self._area)
-			self._toolWindow.setAttractionCount(self._attractionCount)
-			self._toolWindow.setObstacleCount(self._obstacleCount)
+			# TODO: Set visibility counters
+
 		viewCone.setPolygonPoints(points, point_count)
+
+		def UpdateCanvasItems(isovistLayers, visibleObjects, brush, pen):
+			objectIndex = 0
+			for groupIndex, isovistLayer in enumerate(isovistLayers):
+				deprecatedFeatureIndices = set(isovistLayer.canvasItemsByIndex)
+				
+				if visibleObjects and visibleObjects.CountPerGroup:
+					for i in range(visibleObjects.CountPerGroup[groupIndex]):
+						featureIndex = visibleObjects.Indices[objectIndex]
+						if featureIndex in isovistLayer.canvasItemsByIndex:
+							deprecatedFeatureIndices.remove(featureIndex)
+						else:
+							#log(f'Creating new canvas item {groupIndex}:{featureIndex}')
+							feature = isovistLayer.qgisLayer.getFeature(isovistLayer.featureIds[featureIndex])
+							canvasItem = self._createCanvasItemFromGeometry(feature.geometry(), brush, pen)
+							if canvasItem is not None:
+								isovistLayer.canvasItemsByIndex[featureIndex] = canvasItem
+								#canvasItem.update()  # Necessary?
+						objectIndex += 1
+
+				if deprecatedFeatureIndices:
+					scene = self.canvas.scene()
+					for featureIndex in deprecatedFeatureIndices:
+						#log(f'Removing canvas item {groupIndex}:{featureIndex}')
+						canvasItem = isovistLayer.canvasItemsByIndex.pop(featureIndex)
+						canvasItem.hide()
+						scene.removeItem(canvasItem)
+						# del canvasItem
+
+		UpdateCanvasItems(self._obstacleLayers, visibleObstacles, BRUSH_OBSTACLE, QCOLOR_OBSTACLE_EDGE)
+		UpdateCanvasItems(self._attractionPointLayers, visibleAttractionPoints, BRUSH_OBSTACLE, QCOLOR_OBSTACLE_EDGE)
+		UpdateCanvasItems(self._attractionPolygonLayers, visibleAttractionPolygons, BRUSH_OBSTACLE, QCOLOR_OBSTACLE_EDGE)
 
 	def _freeIsovist(self):
 		if self.isovistHandle != None:
@@ -283,8 +342,7 @@ class IsovistMapTool(QgsMapTool):
 		self._removeAllItems()
 		self._freeIsovist()
 		self._freeIsovistContext()
-		self._currentObstacleLayers = []
-		self._currentAbstractionLayers = []
+		self._setLayers([])
 		super().deactivate()
 
 	def _freeIsovistContext(self):
@@ -305,11 +363,10 @@ class IsovistMapTool(QgsMapTool):
 		toolWindow.opacitySelected.connect(lambda value: self.onWndOpacityChanged(value, False))
 		toolWindow.addToPointLayer.connect(self.addToPointLayer)
 		toolWindow.addToPolygonLayer.connect(self.addToPolygonLayer)
-		toolWindow.obstacleLayersSelected.connect(self.setObstacleLayers)
-		toolWindow.attractionLayersSelected.connect(self.setAttractionLayers)
+		toolWindow.layersSelected.connect(self.onLayersSelected)
 		return toolWindow
 
-	def onWndClose(self):
+	def onWndClose(self): 
 		self.canvas.unsetMapTool(self)
 		
 	def onWndMaxDistanceChanged(self, value):
@@ -459,13 +516,23 @@ class IsovistMapTool(QgsMapTool):
 		QgsProject.instance().addMapLayer(layer)
 		return layer
 
-	def setObstacleLayers(self, layers):
-		self._currentObstacleLayers = list(layers)  # Clone
+	def onLayersSelected(self, isovistLayers):
+		self._setLayers(isovistLayers)
 		self._recreateIsovistContext()
 
-	def setAttractionLayers(self, layers):
-		self._currentAttractionLayers = list(layers)  # Clone
-		self._recreateIsovistContext()
+	def _setLayers(self, isovistLayers=[]):
+		# Remove old canvas items
+		scene = self.canvas.scene() if self.canvas else None
+		if scene:
+			for layerSet in [self._obstacleLayers, self._attractionPointLayers, self._attractionPolygonLayers]:
+				if layerSet:
+					for isovistLayer in layerSet:
+						for canvasItem in isovistLayer.canvasItemsByIndex.values():
+							canvasItem.hide()
+							scene.removeItem(canvasItem)
+		self._obstacleLayers = [isovistLayer for isovistLayer in isovistLayers if isovistLayer.obstacle]
+		self._attractionPointLayers = [isovistLayer for isovistLayer in isovistLayers if not isovistLayer.obstacle and isPointLayer(isovistLayer.qgisLayer)]
+		self._attractionPolygonLayers = [isovistLayer for isovistLayer in isovistLayers if not isovistLayer.obstacle and isPolygonLayer(isovistLayer.qgisLayer)]
 
 	def _recreateIsovistContext(self):
 		self._freeIsovist()
@@ -473,10 +540,10 @@ class IsovistMapTool(QgsMapTool):
 		
 		progressDialog = None
 		try:		
-			if self._currentObstacleLayers or self._currentAttractionLayers:
-				progressDialog = ProgressDialog(title="Loading obstacle layers", text="Reading tables...", parent=self._toolWindow)
+			if self._obstacleLayers or self._attractionPointLayers or self._attractionPolygonLayers:
+				progressDialog = ProgressDialog(title="Loading layers", text="Reading tables...", parent=self._toolWindow)
 				progressDialog.open()
-			self.isovistContext = self._createIsovistContext(self._currentObstacleLayers, self._currentAttractionLayers, progressDialog)
+			self.isovistContext = self._createIsovistContext(self._obstacleLayers, self._attractionPointLayers, self._attractionPolygonLayers, progressDialog)
 		finally:
 			if progressDialog:
 				progressDialog.close()
@@ -578,3 +645,39 @@ class IsovistMapTool(QgsMapTool):
 		self._currentItem = item
 		if item == None:
 			self.setCursor(Qt.ArrowCursor)
+
+	def _createCanvasItemFromGeometry(self, geometry: QgsGeometry, brush, pen):
+		def PolygonFromRing(ring, translateX, translateY):
+			polygon = QPolygonF()
+			for qgsPoint in ring:
+				polygon.append(QPointF(qgsPoint.x() + translateX, qgsPoint.y() + translateY))
+			return polygon
+		def PathFromPolygonRings(rings, translateX, translateY):
+			path = QPainterPath()
+			for ring in rings:
+				path.addPolygon(PolygonFromRing(ring, translateX, translateY))
+			return path
+		geo_type = geometry.type()
+		if geo_type == QgsWkbTypes.PointGeometry:
+			point = geometry.centroid().asPoint()
+			return CircleMapCanvasItem(self.canvas, point.x(), point.y(), 5, BRUSH_ATTRACTION, PEN_ATTRACTION)
+		if geo_type == QgsWkbTypes.PolygonGeometry:
+			if geometry.isMultipart():  # not QgsWkbTypes.isSingleType(g.wkbType()):
+				polygons = geometry.asMultiPolygon()
+				# if len(polygons) != 1:
+				# 	log("Multipart polygons not supported")					
+				rings = polygons[0]
+			else:
+				rings = geometry.asPolygon()
+			bb = geometry.boundingBox()  # QgsRectangle
+			width = bb.width()
+			height = bb.height()
+			originX = bb.xMinimum() + width * 0.5
+			originY = bb.yMinimum() + height * 0.5
+			bbLocal = QRectF(-width * 0.5, -height * 0.5, width, height)
+			if len(rings) == 1:
+				polygon = PolygonFromRing(rings[0], -originX, -originY)
+				return PolygonMapCanvasItem(self.canvas, originX, originY, bbLocal, polygon, brush, pen)
+			path = PathFromPolygonRings(rings, -originX, -originY)
+			return PathMapCanvasItem(self.canvas, originX, originY, bbLocal, path, brush, pen)
+		return None

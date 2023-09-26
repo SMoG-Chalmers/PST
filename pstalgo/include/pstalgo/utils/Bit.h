@@ -34,6 +34,8 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 namespace psta
 {
+	// TODO: Replace with std::countr_zero in C++20
+
 	// Returns zero-based index of most significant bit set in 'val' (i.e. val = 0x1000 --> 12)
 	inline unsigned int bit_scan_reverse_32(unsigned long val)
 	{
@@ -60,14 +62,8 @@ namespace psta
 		}
 	#endif
 
-	inline unsigned int bit_scan_reverse(size_t val)
-	{
-		#ifdef PSTA_64
-			return bit_scan_reverse_64(val);
-		#else
-			return bit_scan_reverse_32(val);
-		#endif
-	}
+	inline unsigned int bit_scan_reverse(uint32_t val) { return bit_scan_reverse_32(val); }
+	inline unsigned int bit_scan_reverse(uint64_t val) { return bit_scan_reverse_64(val); }
 
 	template <typename T> T align_up(T val, T alignment)
 	{

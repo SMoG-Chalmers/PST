@@ -103,6 +103,11 @@ template <class T> inline TVec2<T> directionVectorfromAngleRad(T angleRad)
 	return TVec2<T>(cos(angleRad), sin(angleRad));
 }
 
+inline static float angleRadFromDirectionVector(const float2& dir)
+{
+	return atan2f(dir.y, dir.x);
+}
+
 template <typename TVec>
 inline auto OrientationAngleFromVector(const TVec& v) -> decltype(v.x)
 {
@@ -129,6 +134,9 @@ const TOut SignVal(TIn value)
 {
 	return (TOut)(v >= 0) - (TOut)(v < 0)
 }
+
+
+const float MAX_DIAMOND_ANGLE = 4;
 
 // Like atan2(y, x) but angle is in range [0..4] and with non-linear distribution.
 // Measured to be about 5-6x faster than atan2 on x64 (and about 100x on x86!).

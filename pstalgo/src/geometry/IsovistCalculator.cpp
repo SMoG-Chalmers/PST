@@ -58,8 +58,7 @@ void CIsovistCalculator::CalculateIsovist(
 	const uint32_t* edge_count_per_obstacle,
 	size_t obstacle_count,
 	std::vector<float2>& ret_isovist, 
-	size_t& ret_visible_obstacle_count,
-	CBitVector& obstacle_visibility_mask)
+	bit_vector<>& obstacle_visibility_mask)
 {
 	m_EdgeEndPoints.clear();
 	m_EdgeEndPoints.reserve(edge_count * 2);
@@ -125,19 +124,12 @@ void CIsovistCalculator::CalculateIsovist(
 
 	std::sort(m_EdgeEndPoints.begin(), m_EdgeEndPoints.end());
 
-	size_t visible_obstacle_count = 0;
-
-	auto try_add_to_isovist = [&obstacle_visibility_mask, &ret_isovist, origin, &visible_obstacle_count](const float2& pt_local, uint32_t obstacle_index)
+	auto try_add_to_isovist = [&obstacle_visibility_mask, &ret_isovist, origin](const float2& pt_local)
 	{
 		const auto pt_world = pt_local + origin;
 		if (ret_isovist.empty() || (pt_world - ret_isovist.back()).getLengthSqr() > 0.001f)
 		{
 			ret_isovist.push_back(pt_world);
-			if (!obstacle_visibility_mask.get(obstacle_index))
-			{
-				++visible_obstacle_count;
-				obstacle_visibility_mask.set(obstacle_index);
-			}
 		}
 	};
 
@@ -153,7 +145,8 @@ void CIsovistCalculator::CalculateIsovist(
 			auto p0 = edge.p0;
 			auto p1 = edge.p1;
 			ClipLineSegment(p0, p1, plane_fov_min);
-			try_add_to_isovist(p0, edge.obstacle);
+			try_add_to_isovist(p0);
+			obstacle_visibility_mask.set(edge.obstacle);
 		}
 	}
 
@@ -175,7 +168,8 @@ void CIsovistCalculator::CalculateIsovist(
 			}
 			const auto& edge = m_EdgeHeap.top();
 			const auto prev_p1 = edge.p1;
-			try_add_to_isovist(prev_p1, edge.obstacle);
+			try_add_to_isovist(prev_p1);
+			obstacle_visibility_mask.set(edge.obstacle);
 			m_EdgeHeap.pop();
 			if (!m_EdgeHeap.empty())
 			{
@@ -187,8 +181,9 @@ void CIsovistCalculator::CalculateIsovist(
 					const auto dist_from_next_along_normal = dot(normal, prev_p1 - next_edge.p0);
 					const auto p1_normalized = prev_p1.normalized();
 					const auto p = prev_p1 - (p1_normalized * (dist_from_next_along_normal / dot(p1_normalized, normal)));
-					try_add_to_isovist(p, next_edge.obstacle);
+					try_add_to_isovist(p);
 				}
+				obstacle_visibility_mask.set(next_edge.obstacle);  // Correct?
 			}
 		}
 		else
@@ -200,7 +195,8 @@ void CIsovistCalculator::CalculateIsovist(
 			const auto& edge = m_Edges[pt.EdgeIndex()];
 			if (m_EdgeHeap.empty())
 			{
-				try_add_to_isovist(edge.p0, edge.obstacle);
+				try_add_to_isovist(edge.p0);
+				obstacle_visibility_mask.set(edge.obstacle);  // Correct?
 				m_EdgeHeap.push(edge);
 			}
 			else
@@ -216,10 +212,12 @@ void CIsovistCalculator::CalculateIsovist(
 						const auto dist_from_prev_along_normal = dot(normal, edge.p0 - prev_edge.p0);
 						const auto p0_normalized = edge.p0.normalized();
 						const auto p = edge.p0 - (p0_normalized * (dist_from_prev_along_normal / dot(p0_normalized, normal)));
-						try_add_to_isovist(p, edge.obstacle);
+						try_add_to_isovist(p);
+						obstacle_visibility_mask.set(prev_edge.obstacle);  // Correct?
 					}
 					// Add p0 of new edge to isovist
-					try_add_to_isovist(edge.p0, edge.obstacle);
+					try_add_to_isovist(edge.p0);
+					obstacle_visibility_mask.set(edge.obstacle);  // Correct?
 				}
 			}
 		}
@@ -234,10 +232,9 @@ void CIsovistCalculator::CalculateIsovist(
 		auto p0 = edge.p0;
 		auto p1 = edge.p1;
 		ClipLineSegment(p0, p1, plane_fov_min);
-		try_add_to_isovist(p1, edge.obstacle);
+		try_add_to_isovist(p1);
+		obstacle_visibility_mask.set(edge.obstacle);  // Correct?
 	}
-
-	ret_visible_obstacle_count = visible_obstacle_count;
 
 	m_EdgeHeap.clear();
 	m_HeapIndexFromEdgeIndex.clear();

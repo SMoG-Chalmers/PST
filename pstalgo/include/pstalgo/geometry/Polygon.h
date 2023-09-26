@@ -67,3 +67,4 @@ bool TestPointInPolygon(const TVec2<T>& point, psta::span<TVec2<T>> perimeter, p
 
 	return true;
 }
+

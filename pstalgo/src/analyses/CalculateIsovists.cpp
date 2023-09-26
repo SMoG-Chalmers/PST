@@ -24,6 +24,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 #include <pstalgo/analyses/CalculateIsovists.h>
 #include <pstalgo/Debug.h>
 #include <pstalgo/utils/Perf.h>
+#include <pstalgo/geometry/AABSPTree.h>
 #include <pstalgo/geometry/Geometry.h>
 #include <pstalgo/geometry/IsovistCalculator.h>
 #include <pstalgo/geometry/LooseBspTree.h>
@@ -98,6 +99,37 @@ void CalculateArcClippingPlanesAndSegments(unsigned int perimeter_resolution, fl
 	}
 }
 
+uint32_t SCreateIsovistContextDesc::SPolygons::TotalPolygonCount() const
+{
+	uint32_t polygon_count = 0;
+	for (uint32_t group_index = 0; group_index < this->GroupCount; ++group_index)
+	{
+		polygon_count += this->PolygonCountPerGroup[group_index];
+	}
+	return polygon_count;
+}
+
+uint32_t SCreateIsovistContextDesc::SPolygons::TotalCoordCount() const
+{
+	uint32_t coord_count = 0;
+	const auto polygon_count = this->TotalPolygonCount();
+	for (uint32_t polygon_index = 0; polygon_index < polygon_count; ++polygon_index)
+	{
+		coord_count += this->PointCountPerPolygon[polygon_index];
+	}
+	return coord_count;
+}
+
+uint32_t SCreateIsovistContextDesc::SPoints::TotalPointCount() const
+{
+	uint32_t count = 0;
+	for (uint32_t group_index = 0; group_index < this->GroupCount; ++group_index)
+	{
+		count += this->PointCountPerGroup[group_index];
+	}
+	return count;
+}
+
 class CIsovistContext: public IPSTAlgo
 {
 public:
@@ -127,124 +159,198 @@ private:
 		bb_t BB;
 		uint32_t FirstPointIndex;
 		uint32_t PointCount;
+		uint32_t Group;
+		uint32_t IndexInGroup;
 	};
 	typedef std::vector<SPolygon> polygon_vector_t;
 
-	polygon_vector_t m_Polygons;
-	std::vector<float2> m_PolygonPoints;
+	struct SPolygonSet
+	{
+		typedef psta::LooseBspTree<SPolygon, polygon_vector_t::iterator> tree_t;
+		uint32_t GroupCount;
+		polygon_vector_t Polygons;
+		std::vector<float2> PolygonPoints;
+		tree_t Tree;
+	};
 
-	typedef psta::LooseBspTree<SPolygon, polygon_vector_t::iterator> tree_t;
-	tree_t m_Tree;
+	struct SPointSet
+	{
+		struct SPoint
+		{
+			float2 Coords;
+			uint32_t Group;
+			uint32_t IndexInGroup;
+		};
+		typedef std::vector<SPoint> point_vector_t;
+		typedef psta::LooseBspTree<SPoint, point_vector_t::iterator> tree_t;
+		uint32_t GroupCount;
+		point_vector_t Points;
+		tree_t Tree;
+	};
+
+	static SPolygonSet CreatePolygonSet(const SCreateIsovistContextDesc::SPolygons& polygons, const double2& origin);
+
+	SPolygonSet m_Obstacles;
+	SPolygonSet m_AttractionPolygons;
+	SPointSet m_AttractionPoints;
 
 	double2 m_WorldOrigin;
 
-	std::vector<float2> m_Attractions;
 	std::vector<Plane2Df> m_ClippingPlanes;
 	std::vector<std::pair<float2, float2>> m_Edges;
+	std::vector<uint32_t> m_PolygonIndexPerObstacle;;
 	std::vector<uint32_t> m_EdgeCountPerObstacle;
-	CBitVector m_ObstacleVisibilityMask;
+	bit_vector<size_t> m_ObstacleVisibilityMask;
 
 	ObjectPool<std::vector<float2>> m_LocalIsovistPool;
 	ObjectPool<std::vector<double2>> m_WorldIsovistPool;
 
 	CIsovistCalculator m_IsovistCalculator;
+	
+	std::vector<uint32_t> m_TempIndexArray;
 
-	class Result : IPSTAlgo 
+	struct SAttrPointCalc
+	{
+		float2 ObjCoords;
+		float RelDiamondAngle;
+		uint32_t Group : 8;
+		uint32_t IndexInGroup : 24;
+	};
+	std::vector<SAttrPointCalc> m_TempAttrPointCalc;
+
+
+	struct Result
+	{
+		std::vector<double2> Isovist;
+		std::vector<uint32_t> IndexArray;
+	};
+
+	ObjectPool<Result> m_ResultPool;
+
+	class ResultRef : IPSTAlgo
 	{
 	public:
-		Result(CIsovistContext& context, std::vector<double2>&& isovist)
+		ResultRef(CIsovistContext& context, CIsovistContext::Result&& result)
 			: m_Context(context)
-			, m_Isovist(std::forward< std::vector<double2>>(isovist))
+			, m_Result(std::forward<CIsovistContext::Result>(result))
+		{}
+
+		~ResultRef()
 		{
+			m_Context.m_ResultPool.Return(std::move(m_Result));
 		}
 
-		~Result()
-		{
-			m_Context.m_WorldIsovistPool.Return(std::move(m_Isovist));
-		}
+		Result& Result() { return m_Result; }
 
 	private:
 		CIsovistContext& m_Context;
-		std::vector<double2> m_Isovist;
+		CIsovistContext::Result m_Result;
 	};
 
-	friend class Result;
+	friend class ResultRef;
 };
 
-CIsovistContext::CIsovistContext(const SCreateIsovistContextDesc& desc, CPSTAlgoProgressCallback& progress)
+CIsovistContext::SPolygonSet CIsovistContext::CreatePolygonSet(const SCreateIsovistContextDesc::SPolygons& polygons, const double2& origin)
 {
-	// Count total polygon points
-	uint32_t total_polygon_point_count = 0;
-	for (uint32_t polygon_index = 0; polygon_index < desc.m_PolygonCount; ++polygon_index)
-	{
-		total_polygon_point_count += desc.m_PointCountPerPolygon[polygon_index];
-	}
+	SPolygonSet polygonSet;
+	
+	polygonSet.GroupCount = polygons.GroupCount;
 
-	// Decide origin for local space
-	m_WorldOrigin = double2(0, 0);
-	if (total_polygon_point_count || desc.m_AttractionCount)
+	polygonSet.Polygons.resize(polygons.TotalPolygonCount());
 	{
-		CRectd aabb;
-		if (desc.m_AttractionCount)
+		const double2* const points_ptr = (const double2*)polygons.Coords;
+		uint32_t polygon_index = 0;
+		uint32_t point_index = 0;
+		for (uint32_t group_index = 0; group_index < polygons.GroupCount; ++group_index)
 		{
-			aabb = CRectd::BBFromPoints((const double2*)desc.m_AttractionCoords, desc.m_AttractionCount);
-			if (total_polygon_point_count)
+			for (size_t i = 0; i < polygons.PolygonCountPerGroup[group_index]; ++i, ++polygon_index)
 			{
-				aabb = CRectd::Union(aabb, CRectd::BBFromPoints((const double2*)desc.m_PolygonPoints, total_polygon_point_count));
-			}
-		}
-		else
-		{
-			aabb = CRectd::BBFromPoints((const double2*)desc.m_PolygonPoints, total_polygon_point_count);
-		}
-		m_WorldOrigin = double2(trunc(aabb.CenterX()), trunc(aabb.CenterY()));
-	}
-
-	if (total_polygon_point_count)
-	{
-		// Calculate polygon bounding boxes
-		m_Polygons.resize(desc.m_PolygonCount);
-		{
-			const double2* const points_ptr = (const double2*)desc.m_PolygonPoints;
-			uint32_t point_index = 0; 
-			for (uint32_t polygon_index = 0; polygon_index < desc.m_PolygonCount; ++polygon_index)
-			{
-				const auto point_count = desc.m_PointCountPerPolygon[polygon_index];
+				const auto point_count = polygons.PointCountPerPolygon[polygon_index];
 				const auto bb = CRectd::BBFromPoints(points_ptr + point_index, point_count);
-				auto& polygon = m_Polygons[polygon_index];
-				polygon.BB = (TRect<float>)(bb - m_WorldOrigin);
+				auto& polygon = polygonSet.Polygons[polygon_index];
+				polygon.BB = (TRect<float>)(bb - origin);
 				polygon.FirstPointIndex = point_index;
 				polygon.PointCount = point_count;
+				polygon.Group = group_index;
+				polygon.IndexInGroup = (uint32_t)i;
 				point_index += point_count;
 			}
 		}
+	}
 
-		m_Tree = tree_t::FromObjects(m_Polygons.begin(), m_Polygons.end(), MAX_TREE_DEPTH, MAX_POLYGONS_PER_LEAF, [](const SPolygon& polygon) -> const bb_t& { return polygon.BB; });
+	polygonSet.Tree = SPolygonSet::tree_t::FromObjects(polygonSet.Polygons.begin(), polygonSet.Polygons.end(), MAX_TREE_DEPTH, MAX_POLYGONS_PER_LEAF, [](const SPolygon& polygon) -> const bb_t& { return polygon.BB; });
 
-		m_PolygonPoints.reserve(total_polygon_point_count);
+	polygonSet.PolygonPoints.reserve(polygons.TotalCoordCount());
+	{
+		const double2* const points_ptr = (const double2*)polygons.Coords;
+		for (auto& polygon : polygonSet.Polygons)
 		{
-			const double2* const points_ptr = (const double2*)desc.m_PolygonPoints;
-			for (auto& polygon : m_Polygons)
+			const auto original_first_point = polygon.FirstPointIndex;
+			polygon.FirstPointIndex = (uint32_t)polygonSet.PolygonPoints.size();
+			for (uint32_t point_index = original_first_point; point_index < original_first_point + polygon.PointCount; ++point_index)
 			{
-				const auto original_first_point = polygon.FirstPointIndex;
-				polygon.FirstPointIndex = (uint32_t)m_PolygonPoints.size();
-				for (uint32_t point_index = original_first_point; point_index < original_first_point + polygon.PointCount; ++point_index)
-				{
-					m_PolygonPoints.push_back(WorldToLocal(points_ptr[point_index]));
-				}
+				polygonSet.PolygonPoints.push_back((float2)(points_ptr[point_index] - origin));
 			}
 		}
 	}
-	else
+
+	return polygonSet;
+}
+
+CIsovistContext::CIsovistContext(const SCreateIsovistContextDesc& desc, CPSTAlgoProgressCallback& progress)
+{
+	// Decide origin for local space
 	{
+		CRectd aabb_world = CRectd::INVALID;
+		if (const auto coord_count = desc.ObstaclePolygons.TotalCoordCount())
+		{
+			const auto bb = CRectd::BBFromPoints((const double2*)desc.ObstaclePolygons.Coords, coord_count);
+			aabb_world = aabb_world.Valid() ? CRectd::Union(aabb_world, bb) : bb;
+		}
+		if (const auto coord_count = desc.AttractionPoints.TotalPointCount())
+		{
+			const auto bb = CRectd::BBFromPoints((const double2*)desc.AttractionPoints.Coords, coord_count);
+			aabb_world = aabb_world.Valid() ? CRectd::Union(aabb_world, bb) : bb;
+		}
+		if (const auto coord_count = desc.AttractionPolygons.TotalCoordCount())
+		{
+			const auto bb = CRectd::BBFromPoints((const double2*)desc.AttractionPolygons.Coords, coord_count);
+			aabb_world = aabb_world.Valid() ? CRectd::Union(aabb_world, bb) : bb;
+		}
+		m_WorldOrigin = aabb_world.Valid() ? double2(trunc(aabb_world.CenterX()), trunc(aabb_world.CenterY())) : double2(0, 0);
 	}
 
-	// Attractions
-	m_Attractions.resize(desc.m_AttractionCount);
-	for (uint32_t i = 0; i < desc.m_AttractionCount; ++i)
+	// Obstacles
+	m_Obstacles = CreatePolygonSet(desc.ObstaclePolygons, m_WorldOrigin);
+
+	// Attraction Points
+	m_AttractionPoints.GroupCount = desc.AttractionPoints.GroupCount;
+	m_AttractionPoints.Points.resize(desc.AttractionPoints.TotalPointCount());
 	{
-		m_Attractions[i] = WorldToLocal(((const double2*)desc.m_AttractionCoords)[i]);
+		size_t point_index = 0;
+		for (uint32_t group_index = 0; group_index < desc.AttractionPoints.GroupCount; ++group_index)
+		{
+			for (size_t i = 0; i < desc.AttractionPoints.PointCountPerGroup[group_index]; ++i, ++point_index)
+			{
+				auto& point = m_AttractionPoints.Points[point_index];
+				point.Coords = WorldToLocal(((const double2*)desc.AttractionPoints.Coords)[point_index]);
+				point.Group = group_index;
+				point.IndexInGroup = (uint32_t)i;
+			}
+		}
+		ASSERT(m_AttractionPoints.Points.size() == point_index);
+
+		m_AttractionPoints.Tree = SPointSet::tree_t::FromObjects(
+			m_AttractionPoints.Points.begin(), m_AttractionPoints.Points.end(), 
+			MAX_TREE_DEPTH, MAX_POLYGONS_PER_LEAF, 
+			[](const SPointSet::SPoint& point) -> const bb_t
+			{
+				return bb_t(point.Coords, point.Coords);
+			});
 	}
+
+	// Attraction Polygons
+	m_AttractionPolygons = CreatePolygonSet(desc.AttractionPolygons, m_WorldOrigin);
 
 	progress.ReportProgress(1);
 }
@@ -255,6 +361,25 @@ float CalcRadForSegmentedCircle(int seg_count) {
 	return sqrt((float)PI / ((float)seg_count * sin(half_angle) * cos(half_angle)));
 }
 
+template <class T>
+static size_t CountPointsInIsovist(const TVec2<T>& origin, psta::span<TVec2<T>> perimeter, psta::span<TVec2<T>> points)
+{
+	if (!TestPointInRing(point, perimeter.data(), perimeter_size.size()))
+	{
+		return false;
+	}
+
+	for (const auto& hole : holes)
+	{
+		if (TestPointInRing(point, hole.data(), hole.size()))
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
 void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProgressCallback& progress)
 {
 	desc.m_OutPointCount = 0;
@@ -263,32 +388,46 @@ void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProg
 
 	progress.ReportProgress(1);
 
+	const float direction_degrees = (desc.m_FieldOfViewDegrees < 360) ? desc.m_DirectionDegrees : 0;
+
 	const float perimeter_segment_angle = desc.m_PerimeterSegmentCount ? (float)PI * 2.f / desc.m_PerimeterSegmentCount : (float)PI * 2.f;
 	const float outer_clipping_radius = (float)desc.m_MaxViewDistance * CalcRadForSegmentedCircle(desc.m_PerimeterSegmentCount);
 	const float inner_clipping_radius = outer_clipping_radius * cosf(perimeter_segment_angle * .5f);
 
 	const float2 origin_local = WorldToLocal(double2(desc.m_OriginX, desc.m_OriginY));
 
+	m_PolygonIndexPerObstacle.clear();
 	m_EdgeCountPerObstacle.clear();
 
 	// Clipping planes and edges
 	m_ClippingPlanes.clear();
 	m_Edges.clear();
-	CalculateArcClippingPlanesAndSegments(desc.m_PerimeterSegmentCount, outer_clipping_radius, (float)desc.m_FieldOfViewDegrees, (float)desc.m_DirectionDegrees, m_ClippingPlanes, m_Edges);
-	m_EdgeCountPerObstacle.push_back((uint32_t)m_Edges.size());  // Perimeter is first obstacle
+	CalculateArcClippingPlanesAndSegments(desc.m_PerimeterSegmentCount, outer_clipping_radius, (float)desc.m_FieldOfViewDegrees, direction_degrees, m_ClippingPlanes, m_Edges);
+	
+	// Perimeter is first obstacle
+	m_PolygonIndexPerObstacle.push_back(-1);
+	m_EdgeCountPerObstacle.push_back((uint32_t)m_Edges.size());  
 
-	const auto view_direction_vec = directionVectorfromAngleRad(deg2rad((float)desc.m_DirectionDegrees));
+	const auto view_direction_vec = directionVectorfromAngleRad(deg2rad(direction_degrees));
 	const auto view_dir_plane = Plane2Df({ view_direction_vec, 0 });
 
-	const auto vec_fov_min = directionVectorfromAngleRad(deg2rad((float)desc.m_DirectionDegrees - .5f * (float)desc.m_FieldOfViewDegrees + 90));
-	const auto vec_fov_max = directionVectorfromAngleRad(deg2rad((float)desc.m_DirectionDegrees + .5f * (float)desc.m_FieldOfViewDegrees - 90));
-	const Plane2Df plane_fov_min = { vec_fov_min, dot(origin_local, vec_fov_min) };
-	const Plane2Df plane_fov_max = { vec_fov_max, dot(origin_local, vec_fov_max) };
+	// Direction of vectors along edges of field of view.
+	const auto tangent_fov_min = (desc.m_FieldOfViewDegrees < 360) ? directionVectorfromAngleRad(deg2rad(direction_degrees - .5f * (float)desc.m_FieldOfViewDegrees)) : float2(-1, 0);
+	const auto tangent_fov_max = (desc.m_FieldOfViewDegrees < 360) ? directionVectorfromAngleRad(deg2rad(direction_degrees + .5f * (float)desc.m_FieldOfViewDegrees)) : float2(-1, 0);
+	
+	// Normals of edges of field of view, pointing inwards into view cone
+	const float2 normal_fov_min(-tangent_fov_min.y, tangent_fov_min.x);
+	const float2 normal_fov_max(tangent_fov_max.y, -tangent_fov_max.x);
+
+	const Plane2Df plane_fov_min = { normal_fov_min, dot(origin_local, normal_fov_min) };
+	const Plane2Df plane_fov_max = { normal_fov_max, dot(origin_local, normal_fov_max) };
 
 	// Add edges from polygons
 	{
+		const auto outer_clipping_radius_sqrd = outer_clipping_radius * outer_clipping_radius;
+
 		bool done = false;  // TODO: Do this with cancellation token instead
-		m_Tree.VisitItems(
+		m_Obstacles.Tree.VisitItems(
 			[&](const bb_t& bb) -> bool
 			{
 				return !done && bb.OverlapsCircle(origin_local, outer_clipping_radius);
@@ -300,7 +439,7 @@ void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProg
 					return;
 				}
 
-				const auto* points = m_PolygonPoints.data() + polygon.FirstPointIndex;
+				const auto* points = m_Obstacles.PolygonPoints.data() + polygon.FirstPointIndex;
 
 				if (polygon.BB.Contains(origin_local.x, origin_local.y) && TestPointInRing(origin_local, psta::make_span(points, polygon.PointCount)))
 				{
@@ -329,28 +468,31 @@ void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProg
 				for (uint32_t point_index = 0; point_index < polygon.PointCount; ++point_index)
 				{
 					const auto pt_next = points[point_index] - origin_local;
-					auto edge = std::make_pair(pt_prev, pt_next);
-					pt_prev = pt_next;
-
-					if (needs_clipping)
+					if (crp(pt_prev, pt_next) >= 0 && TestLineSegmentAndCircleOverlap(pt_prev, pt_next, outer_clipping_radius, outer_clipping_radius_sqrd))
 					{
-						size_t plane_index;
-						for (plane_index = 0; plane_index < m_ClippingPlanes.size(); ++plane_index)
+						auto edge = std::make_pair(pt_prev, pt_next);
+						if (needs_clipping)
 						{
-							if (!ClipLineSegment(edge.first, edge.second, m_ClippingPlanes[plane_index]))
-								break;
-						};
-						if (plane_index == m_ClippingPlanes.size())
+							size_t plane_index;
+							for (plane_index = 0; plane_index < m_ClippingPlanes.size(); ++plane_index)
+							{
+								if (!ClipLineSegment(edge.first, edge.second, m_ClippingPlanes[plane_index]))
+									break;
+							};
+							if (plane_index == m_ClippingPlanes.size())
+							{
+								m_Edges.push_back(edge);
+							}
+						}
+						else
 						{
 							m_Edges.push_back(edge);
 						}
 					}
-					else
-					{
-						m_Edges.push_back(edge);
-					}
+					pt_prev = pt_next;
 				}
 
+				m_PolygonIndexPerObstacle.push_back((uint32_t)(&polygon - m_Obstacles.Polygons.data()));
 				m_EdgeCountPerObstacle.push_back((uint32_t)(m_Edges.size() - prev_edge_count));
 			});
 
@@ -360,25 +502,23 @@ void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProg
 		}
 	}
 
-	size_t visible_obstacle_count = 0;
-	auto local_points = m_LocalIsovistPool.Borrow();
-	local_points.clear();
-	m_IsovistCalculator.CalculateIsovist(float2(0, 0), (float)desc.m_FieldOfViewDegrees, (float)desc.m_DirectionDegrees, m_Edges.data(), m_Edges.size(), m_EdgeCountPerObstacle.data(), m_EdgeCountPerObstacle.size(), local_points, visible_obstacle_count, m_ObstacleVisibilityMask);
+	auto isovist_points = m_LocalIsovistPool.Borrow();
+	isovist_points.clear();
+	m_IsovistCalculator.CalculateIsovist(float2(0, 0), (float)desc.m_FieldOfViewDegrees, direction_degrees, m_Edges.data(), m_Edges.size(), m_EdgeCountPerObstacle.data(), m_EdgeCountPerObstacle.size(), isovist_points, m_ObstacleVisibilityMask);
 
-	// Don't include perimeter in object count
-	if (m_ObstacleVisibilityMask.get(0))
-	{
-		m_ObstacleVisibilityMask.clear(0);
-		--visible_obstacle_count;
-	}
+	auto resultRef = std::make_unique<ResultRef>(*this, m_ResultPool.Borrow());
+	auto& result = resultRef->Result();
+
+	result.Isovist.clear();
+	result.Isovist.reserve(isovist_points.size());
 
 	// Calculate area
 	double area = 0;
 	{
-		auto prev_v = local_points.back();
-		for (size_t i = 0; i < local_points.size(); ++i)
+		auto prev_v = isovist_points.back();
+		for (size_t i = 0; i < isovist_points.size(); ++i)
 		{
-			const auto base_v = local_points[i];
+			const auto base_v = isovist_points[i];
 			const auto base_len = base_v.getLength();
 			if (base_len > 0.f) {
 				const auto base_len_inv = 1.f / base_len;
@@ -390,37 +530,199 @@ void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProg
 		area = std::abs(area * .5);  // Don't forget to divide by two here!
 	}
 
-	auto world_isovist = m_WorldIsovistPool.Borrow();
-	world_isovist.clear();
-	world_isovist.reserve(local_points.size());
-
-	// Translate isovis coordinates to local space (from isovist object space)
-	for (auto& pt : local_points)
+	m_TempIndexArray.clear();
+	const auto total_visibility_group_count = m_Obstacles.GroupCount + m_AttractionPoints.GroupCount + m_AttractionPolygons.GroupCount;
+	m_TempIndexArray.resize(total_visibility_group_count);
 	{
-		pt += origin_local;
+		uint32_t base_visible_group_index = 0;
+		auto& add_visible_object = [&](uint32_t group_index, uint32_t index_in_group)
+		{
+			++m_TempIndexArray[base_visible_group_index + group_index];
+			m_TempIndexArray.push_back(((base_visible_group_index + group_index) << 24) | (index_in_group & 0x00FFFFFF));
+		};
+
+		const auto& isovist_obj_points = isovist_points;  // Isovist points relative to view origin
+
+		// Calculate isovist bounding box relative to view origin
+		const auto isovist_obj_bb = CRectf::BBFromPoints(isovist_obj_points.data(), (uint32_t)isovist_obj_points.size());
+
+		// Calculate isovist bounding box in local space
+		const auto isovist_local_bb = isovist_obj_bb.Offsetted(origin_local.x, origin_local.y);
+
+		// Obstacles (polygons)
+		{
+			m_ObstacleVisibilityMask.forEachSetBit([&](size_t index)
+			{
+				if (0 == index)  // Don't include perimeter in obstacle count
+				{
+					return;
+				}
+				auto& poly = this->m_Obstacles.Polygons[m_PolygonIndexPerObstacle[index]];
+				add_visible_object(poly.Group, poly.IndexInGroup);
+			});
+			base_visible_group_index += m_Obstacles.GroupCount;
+		}
+
+		// Attraction points
+		if (m_AttractionPoints.GroupCount)
+		{
+			const float max_view_dist_sqrd = desc.m_MaxViewDistance * desc.m_MaxViewDistance;
+			const auto fov_diamond_angle_0 = DiamondAngleFromVector(tangent_fov_min);
+			const auto fov_diamond_angle_1 = DiamondAngleFromVector(tangent_fov_max);
+			const auto fov_diamond_angle_span = ((fov_diamond_angle_0 < fov_diamond_angle_1) ? 0 : MAX_DIAMOND_ANGLE) + fov_diamond_angle_1 - fov_diamond_angle_0;
+
+			// Find potential points
+			m_TempAttrPointCalc.clear();
+			m_AttractionPoints.Tree.ForEachRangeInBB(isovist_local_bb, [&](auto beg, auto end)
+			{
+				for (auto it = beg; it != end; ++it)
+				{
+					auto& pt = *it;
+					const auto pos_obj = pt.Coords - origin_local;
+					// Beyond max view distance?
+					const auto dist_sqrd = pos_obj.getLengthSqr();
+					if (dist_sqrd > max_view_dist_sqrd)
+					{
+						continue;
+					}
+					// Outside FOV cone?
+					const auto diamond_angle = DiamondAngleFromVector(pos_obj);
+					const auto rel_diamond_angle = (diamond_angle < fov_diamond_angle_0 ? MAX_DIAMOND_ANGLE : 0.0f) + diamond_angle - fov_diamond_angle_0;
+					if (rel_diamond_angle > fov_diamond_angle_span)
+						continue;
+					// Add point
+					SAttrPointCalc ap;
+					ap.RelDiamondAngle = rel_diamond_angle;
+					ap.ObjCoords = pos_obj;
+					ap.Group = pt.Group;
+					ap.IndexInGroup = pt.IndexInGroup;
+					m_TempAttrPointCalc.push_back(ap);
+				}
+			});
+
+			if (!m_TempAttrPointCalc.empty())
+			{
+				// Sort points by direction
+				std::sort(m_TempAttrPointCalc.begin(), m_TempAttrPointCalc.end(), [](const auto& a, const auto& b) { return a.RelDiamondAngle < b.RelDiamondAngle; });
+
+				float2 prev_isovist_pt;
+				size_t next_isovist_index;
+				if (desc.m_FieldOfViewDegrees < 360)
+				{
+					ASSERT(isovist_obj_points[0] == float2(0, 0));
+					prev_isovist_pt = isovist_obj_points[1];
+					next_isovist_index = 2;
+				}
+				else
+				{
+					prev_isovist_pt = isovist_obj_points.front();
+					next_isovist_index = 1;
+				}
+
+				size_t attr_point_index = 0;
+				float prev_rel_diamond_angle = 0;
+				const size_t last_isovist_index = (desc.m_FieldOfViewDegrees < 360) ? isovist_obj_points.size() - 1 : isovist_obj_points.size();
+				for (; next_isovist_index <= last_isovist_index; ++next_isovist_index)
+				{
+					const auto next_isovist_pt = isovist_obj_points[next_isovist_index < isovist_obj_points.size() ? next_isovist_index : 0];
+					const auto diamond_angle = DiamondAngleFromVector(next_isovist_pt);
+					auto rel_diamond_angle = (diamond_angle < fov_diamond_angle_0 ? MAX_DIAMOND_ANGLE : 0.0f) + diamond_angle - fov_diamond_angle_0;
+					if (next_isovist_index == isovist_obj_points.size() && rel_diamond_angle < MAX_DIAMOND_ANGLE * .5f)
+					{
+						// Wrapped around at end of 360 isovist
+						rel_diamond_angle += MAX_DIAMOND_ANGLE;
+					}
+					for (;; ++attr_point_index)
+					{
+						if (attr_point_index >= m_TempAttrPointCalc.size())
+						{
+							goto done;
+						}
+						const auto& attr_pt = m_TempAttrPointCalc[attr_point_index];
+						if (attr_pt.RelDiamondAngle > rel_diamond_angle)
+						{
+							break;
+						}
+						if (crp(next_isovist_pt - prev_isovist_pt, attr_pt.ObjCoords - prev_isovist_pt) >= 0)
+						{
+							add_visible_object(attr_pt.Group, attr_pt.IndexInGroup);
+						}
+					}
+					prev_isovist_pt = next_isovist_pt;
+					prev_rel_diamond_angle = rel_diamond_angle;
+				}
+			}
+done:
+			base_visible_group_index += m_AttractionPoints.GroupCount;
+		}
+
+		// Attraction polygons
+		if (m_AttractionPolygons.GroupCount)
+		{
+			// TODO: Implement
+
+
+
+			base_visible_group_index += m_AttractionPolygons.GroupCount;
+		}
+	}
+	
+	result.IndexArray.resize(m_TempIndexArray.size());
+
+	{
+		uint32_t n = 0;
+		for (size_t i = 0; i < total_visibility_group_count; ++i)
+		{
+			result.IndexArray[i] = m_TempIndexArray[i];
+			m_TempIndexArray[i] = n;
+			n += result.IndexArray[i];
+		}
+
+		for (size_t i = total_visibility_group_count; i < m_TempIndexArray.size(); ++i)
+		{
+			const auto group_and_idx = m_TempIndexArray[i];
+			const auto group_index = group_and_idx >> 24;
+			const auto index_in_group = group_and_idx & 0x00FFFFFF;
+			auto& group_at = m_TempIndexArray[group_index];
+			result.IndexArray[total_visibility_group_count + group_at++] = index_in_group;
+		}
 	}
 
-	// Count attractions inside isovist
-	uint32_t attraction_count = 0;
-	for (const auto& pt : m_Attractions)
+	m_TempIndexArray.clear();
+
 	{
-		attraction_count += (uint32_t)TestPointInRing(pt, psta::make_span(local_points));
+		desc.m_OutVisibleObstacles.GroupCount = m_Obstacles.GroupCount;
+		desc.m_OutVisibleAttractionPoints.GroupCount = m_AttractionPoints.GroupCount;
+		desc.m_OutVisibleAttractionPolygons.GroupCount = m_AttractionPolygons.GroupCount;
+		uint32_t group_counter = 0;
+		auto group_index = 0;
+		auto* groups_at = result.IndexArray.data();
+		auto* indices_at = result.IndexArray.data() + total_visibility_group_count;
+		for (auto* visible_objects : { &desc.m_OutVisibleObstacles , &desc.m_OutVisibleAttractionPoints , &desc.m_OutVisibleAttractionPolygons })
+		{
+			visible_objects->CountPerGroup = groups_at;
+			visible_objects->Indices = indices_at;
+			for (uint32_t group_index = 0; group_index < visible_objects->GroupCount; ++group_index)
+			{
+				const auto group_size = *groups_at++;
+				visible_objects->ObjectCount += group_size;
+				indices_at += group_size;
+			}
+		}
 	}
-	desc.m_OutAttractionCount = attraction_count;
 
 	// Translate isovist to world coordinates
-	for (auto it = local_points.crbegin(); local_points.crend() != it; ++it)
+	for (auto it = isovist_points.crbegin(); isovist_points.crend() != it; ++it)
 	{
-		world_isovist.push_back(LocalToWorld(*it));
+		result.Isovist.push_back(LocalToWorld(*it + origin_local));
 	}
 
-	m_LocalIsovistPool.Return(std::move(local_points));
+	m_LocalIsovistPool.Return(std::move(isovist_points));
 
-	desc.m_OutPointCount = (uint32_t)world_isovist.size();
-	desc.m_OutPoints = &world_isovist.data()->x;
-	desc.m_OutIsovistHandle = new Result(*this, std::move(world_isovist));
+	desc.m_OutPointCount = (uint32_t)result.Isovist.size();
+	desc.m_OutPoints = &result.Isovist.data()->x;
+	desc.m_OutIsovistHandle = resultRef.release();  // NOTE: Ownership of result is transferred here
 	desc.m_OutArea = (float)area;
-	desc.m_OutVisibleObstacleCount = visible_obstacle_count;
 
 	progress.ReportProgress(1);
 }

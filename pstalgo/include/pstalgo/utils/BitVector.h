@@ -22,6 +22,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
+#include <pstalgo/utils/Bit.h>
 #include <vector>
 
 
@@ -30,23 +31,51 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 //  CBitVector
 //
 
-class CBitVector {
-
-protected:
-	typedef unsigned long TWord;
+template <typename TWord = size_t>
+class bit_vector {
 
 // Data Members
 protected:
 	std::vector<TWord> m_bits;
+	size_t m_Size = 0;
+	const unsigned int WORD_BIT_COUNT = sizeof(TWord) * 8;
 
 // Operations
 public:
-	inline size_t size() const        { return m_bits.size() << 5; }
-	inline void   resize(size_t size) { m_bits.resize((size + 31) >> 5); }
+	inline bool   empty() const       { return 0 == m_Size; }
+	inline size_t size() const        { return m_Size; }
+	inline void   resize(size_t size) { m_Size = size;  m_bits.resize((size + WORD_BIT_COUNT - 1) / WORD_BIT_COUNT); }
 	inline void   clearAll()          { if (!m_bits.empty()) memset(&m_bits.front(), 0x00, m_bits.size() * sizeof(TWord)); }
 	inline void   setAll()            { if (!m_bits.empty()) memset(&m_bits.front(), 0xFF, m_bits.size() * sizeof(TWord)); }
-	inline bool   get(size_t index) const { return (m_bits[index >> 5] & ((TWord)1 << (index & 31))) != 0; }
-	inline void   set(size_t index)   { m_bits[index >> 5] |= ((TWord)1 << (index & 31)); }
-	inline void   clear(size_t index) { m_bits[index >> 5] &= ~((TWord)1 << (index & 31)); }
-
+	inline bool   get(size_t index) const { return (m_bits[index / WORD_BIT_COUNT] & ((TWord)1 << (index & (WORD_BIT_COUNT - 1)))) != 0; }
+	inline void   set(size_t index)   { m_bits[index / WORD_BIT_COUNT] |= ((TWord)1 << (index & (WORD_BIT_COUNT - 1))); }
+	inline void   clear(size_t index) { m_bits[index / WORD_BIT_COUNT] &= ~((TWord)1 << (index & (WORD_BIT_COUNT - 1))); }
+	
+	template <class TFunc>
+	inline void forEachSetBit(TFunc&& fn) const
+	{
+		if (empty())
+		{
+			return;
+		}
+		auto* at = m_bits.data();
+		auto* end = at + m_bits.size();
+		for (size_t base_index = 0; at < end; at++, base_index += WORD_BIT_COUNT)
+		{
+			auto w = *at;
+			while (w)
+			{
+				const auto bit_index = psta::bit_scan_reverse(w);
+				const auto index = base_index + bit_index;
+				if (index >= m_Size)
+				{
+					return;
+				}
+				w ^= (TWord)1 << bit_index;
+				fn(index);
+			}
+		}
+	}
 };
+
+typedef bit_vector<unsigned int> CBitVector;
