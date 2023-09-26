@@ -325,8 +325,10 @@ class QGISModel(object):
 					rings = g.asPolygon()
 				#rings = g.asPolygon()
 				outer_ring = rings[0]  # First polyline is outer ring, the rest are inner rings (if any)
-				out_coord_counts.append(len(outer_ring))
-				for point in outer_ring:
+				outer_ring_len = len(outer_ring) - 1  # First and last point are duplicates
+				out_coord_counts.append(outer_ring_len)
+				for pt_index in range(outer_ring_len):
+					point = outer_ring[pt_index]
 					coords.append(point.x())
 					coords.append(point.y())
 				if out_rowids is not None:
