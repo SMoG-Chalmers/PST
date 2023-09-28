@@ -80,3 +80,13 @@ inline bool TestLineSegmentAndCircleOverlap(const TVec2<T>& p0, const TVec2<T>& 
 
 	return at > -line_length && at < 0;
 }
+
+template <class T>
+inline bool TestLineSegmentsIntersection(const TVec2<T>& a0, const TVec2<T>& a1, const TVec2<T>& b0, const TVec2<T>& b1)
+{
+	const auto aV = a1 - a0;
+	if (crp(aV, b0 - a0) * crp(aV, b1 - a0) > 0)
+		return false;
+	const auto bV = b1 - b0;
+	return crp(bV, a0 - b0) * crp(bV, a1 - b0) <= 0;
+}

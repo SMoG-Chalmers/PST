@@ -178,7 +178,7 @@ class IsovistMapTool(QgsMapTool):
 
 	def activate(self):
 		""" Called by QGIS """
-		log("activate")
+		#log("activate")
 
 		mapCenter = self.mapCenter()
 		self.originX = mapCenter.x()
@@ -295,6 +295,7 @@ class IsovistMapTool(QgsMapTool):
 		viewCone.setPolygonPoints(points, point_count)
 
 		def UpdateCanvasItems(isovistLayers, visibleObjects, brush, pen):
+			newCanvasItemsWereCreated = False
 			objectIndex = 0
 			for groupIndex, isovistLayer in enumerate(isovistLayers):
 				deprecatedFeatureIndices = set(isovistLayer.canvasItemsByIndex)
@@ -305,12 +306,13 @@ class IsovistMapTool(QgsMapTool):
 						if featureIndex in isovistLayer.canvasItemsByIndex:
 							deprecatedFeatureIndices.remove(featureIndex)
 						else:
-							#log(f'Creating new canvas item {groupIndex}:{featureIndex}')
+							#log(f'Creating new canvas item for layer "{isovistLayer.qgisLayer.name()}" ({groupIndex}:{featureIndex}) objectIndex={objectIndex}')
 							feature = isovistLayer.qgisLayer.getFeature(isovistLayer.featureIds[featureIndex])
 							canvasItem = self._createCanvasItemFromGeometry(feature.geometry(), brush, pen)
 							if canvasItem is not None:
 								isovistLayer.canvasItemsByIndex[featureIndex] = canvasItem
 								#canvasItem.update()  # Necessary?
+								newCanvasItemsWereCreated = True
 						objectIndex += 1
 
 				if deprecatedFeatureIndices:
@@ -321,10 +323,20 @@ class IsovistMapTool(QgsMapTool):
 						canvasItem.hide()
 						scene.removeItem(canvasItem)
 						# del canvasItem
+			
+			if newCanvasItemsWereCreated:
+				viewCone = self.currentItem()
+				if viewCone:
+					# Make sure view cone is drawn on top of all other canvas items by removing it and then adding it last
+					scene = self.canvas.scene()
+					viewCone.hide()
+					scene.removeItem(viewCone)
+					scene.addItem(viewCone)
+					viewCone.show()
 
 		UpdateCanvasItems(self._obstacleLayers, visibleObstacles, BRUSH_OBSTACLE, QCOLOR_OBSTACLE_EDGE)
-		UpdateCanvasItems(self._attractionPointLayers, visibleAttractionPoints, BRUSH_OBSTACLE, QCOLOR_OBSTACLE_EDGE)
-		UpdateCanvasItems(self._attractionPolygonLayers, visibleAttractionPolygons, BRUSH_OBSTACLE, QCOLOR_OBSTACLE_EDGE)
+		UpdateCanvasItems(self._attractionPointLayers, visibleAttractionPoints, BRUSH_ATTRACTION, PEN_ATTRACTION)
+		UpdateCanvasItems(self._attractionPolygonLayers, visibleAttractionPolygons, BRUSH_ATTRACTION, PEN_ATTRACTION)
 
 	def _freeIsovist(self):
 		if self.isovistHandle != None:
@@ -336,7 +348,7 @@ class IsovistMapTool(QgsMapTool):
 
 	def deactivate(self):
 		""" Called by QGIS """
-		log("deactivate")
+		#log("deactivate")
 		if self._toolWindow is not None:
 			self._toolWindow.hide()
 		self._removeAllItems()
@@ -660,7 +672,7 @@ class IsovistMapTool(QgsMapTool):
 		geo_type = geometry.type()
 		if geo_type == QgsWkbTypes.PointGeometry:
 			point = geometry.centroid().asPoint()
-			return CircleMapCanvasItem(self.canvas, point.x(), point.y(), 5, BRUSH_ATTRACTION, PEN_ATTRACTION)
+			return CircleMapCanvasItem(self.canvas, point.x(), point.y(), 5, brush, pen)
 		if geo_type == QgsWkbTypes.PolygonGeometry:
 			if geometry.isMultipart():  # not QgsWkbTypes.isSingleType(g.wkbType()):
 				polygons = geometry.asMultiPolygon()

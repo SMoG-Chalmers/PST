@@ -218,6 +218,17 @@ private:
 	};
 	std::vector<SAttrPointCalc> m_TempAttrPointCalc;
 
+	struct SAttrEdgeCalc
+	{
+		float2 P0;
+		float2 P1;
+		float RelDiamondAngle0;
+		float RelDiamondAngle1;
+		uint32_t Group;
+		uint32_t IndexInGroup;
+	};
+	std::vector<SAttrEdgeCalc> m_TempAttrEdgeQueue;
+	std::vector<SAttrEdgeCalc> m_TempAttrEdgeActive;
 
 	struct Result
 	{
@@ -380,6 +391,22 @@ static size_t CountPointsInIsovist(const TVec2<T>& origin, psta::span<TVec2<T>> 
 	return true;
 }
 
+// TODO: Move
+template <class T>
+size_t remove_duplicates(psta::span<T> items)
+{
+	std::sort(items.data(), items.data() + items.size());
+	size_t unique_count = std::min((size_t)1, items.size());
+	for (size_t i = 1; i < items.size(); ++i)
+	{
+		if (items[i] != items[unique_count - 1])
+		{
+			items[unique_count++] = items[i];
+		}
+	}
+	return unique_count;
+}
+
 void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProgressCallback& progress)
 {
 	desc.m_OutPointCount = 0;
@@ -393,6 +420,8 @@ void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProg
 	const float perimeter_segment_angle = desc.m_PerimeterSegmentCount ? (float)PI * 2.f / desc.m_PerimeterSegmentCount : (float)PI * 2.f;
 	const float outer_clipping_radius = (float)desc.m_MaxViewDistance * CalcRadForSegmentedCircle(desc.m_PerimeterSegmentCount);
 	const float inner_clipping_radius = outer_clipping_radius * cosf(perimeter_segment_angle * .5f);
+
+	const auto outer_clipping_radius_sqrd = outer_clipping_radius * outer_clipping_radius;
 
 	const float2 origin_local = WorldToLocal(double2(desc.m_OriginX, desc.m_OriginY));
 
@@ -422,10 +451,13 @@ void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProg
 	const Plane2Df plane_fov_min = { normal_fov_min, dot(origin_local, normal_fov_min) };
 	const Plane2Df plane_fov_max = { normal_fov_max, dot(origin_local, normal_fov_max) };
 
+	const float max_view_dist_sqrd = desc.m_MaxViewDistance * desc.m_MaxViewDistance;
+	const auto fov_diamond_angle_0 = DiamondAngleFromVector(tangent_fov_min);
+	const auto fov_diamond_angle_1 = DiamondAngleFromVector(tangent_fov_max);
+	const auto fov_diamond_angle_span = ((fov_diamond_angle_0 < fov_diamond_angle_1) ? 0 : MAX_DIAMOND_ANGLE) + fov_diamond_angle_1 - fov_diamond_angle_0;
+
 	// Add edges from polygons
 	{
-		const auto outer_clipping_radius_sqrd = outer_clipping_radius * outer_clipping_radius;
-
 		bool done = false;  // TODO: Do this with cancellation token instead
 		m_Obstacles.Tree.VisitItems(
 			[&](const bb_t& bb) -> bool
@@ -551,6 +583,8 @@ void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProg
 
 		// Obstacles (polygons)
 		{
+			const size_t prev_temp_index_array_size = m_TempIndexArray.size();
+
 			m_ObstacleVisibilityMask.forEachSetBit([&](size_t index)
 			{
 				if (0 == index)  // Don't include perimeter in obstacle count
@@ -560,16 +594,19 @@ void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProg
 				auto& poly = this->m_Obstacles.Polygons[m_PolygonIndexPerObstacle[index]];
 				add_visible_object(poly.Group, poly.IndexInGroup);
 			});
+
+			if (m_Obstacles.GroupCount > 1)
+			{
+				std::sort(m_TempIndexArray.data() + prev_temp_index_array_size, m_TempIndexArray.data() + m_TempIndexArray.size());
+			}
+
 			base_visible_group_index += m_Obstacles.GroupCount;
 		}
 
 		// Attraction points
 		if (m_AttractionPoints.GroupCount)
 		{
-			const float max_view_dist_sqrd = desc.m_MaxViewDistance * desc.m_MaxViewDistance;
-			const auto fov_diamond_angle_0 = DiamondAngleFromVector(tangent_fov_min);
-			const auto fov_diamond_angle_1 = DiamondAngleFromVector(tangent_fov_max);
-			const auto fov_diamond_angle_span = ((fov_diamond_angle_0 < fov_diamond_angle_1) ? 0 : MAX_DIAMOND_ANGLE) + fov_diamond_angle_1 - fov_diamond_angle_0;
+			const size_t prev_temp_index_array_size = m_TempIndexArray.size();
 
 			// Find potential points
 			m_TempAttrPointCalc.clear();
@@ -653,16 +690,225 @@ void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProg
 				}
 			}
 done:
+			if (m_AttractionPoints.GroupCount > 1)
+			{
+				std::sort(m_TempIndexArray.data() + prev_temp_index_array_size, m_TempIndexArray.data() + m_TempIndexArray.size());
+			}
+
 			base_visible_group_index += m_AttractionPoints.GroupCount;
 		}
 
 		// Attraction polygons
 		if (m_AttractionPolygons.GroupCount)
 		{
-			// TODO: Implement
+			const size_t prev_temp_index_array_size = m_TempIndexArray.size();
+			
+			m_TempAttrEdgeQueue.clear();
+			m_AttractionPolygons.Tree.VisitItems(
+				[&](const bb_t& bb) -> bool
+				{
+					return bb.OverlapsCircle(origin_local, outer_clipping_radius);
+				},
+				[&](const SPolygon& polygon)
+				{
+					if (!polygon.BB.OverlapsCircle(origin_local, outer_clipping_radius))
+					{
+						return;
+					}
+					
+					const auto* points = m_AttractionPolygons.PolygonPoints.data() + polygon.FirstPointIndex;
 
+					// Origin inside polygon?
+					if (polygon.BB.Contains(origin_local.x, origin_local.y) && TestPointInRing(origin_local, psta::make_span(points, polygon.PointCount)))
+					{
+						add_visible_object(polygon.Group, polygon.IndexInGroup);
+						return;
+					}
 
+					// Check if bb is outside edges of field of view
+					if (desc.m_FieldOfViewDegrees < 360)
+					{
+						const bool behind_fov_edge_min = plane_fov_min.IsBehind(polygon.BB);
+						const bool behind_fov_edge_max = plane_fov_max.IsBehind(polygon.BB);
+						const bool outside = (desc.m_FieldOfViewDegrees <= 180) ? (behind_fov_edge_min | behind_fov_edge_max) : (behind_fov_edge_min & behind_fov_edge_max);
+						if (outside)
+						{
+							return;
+						}
+					}
 
+					auto pt_prev = points[polygon.PointCount - 1] - origin_local;
+					const auto diamond_angle = DiamondAngleFromVector(pt_prev);
+					auto prev_rel_diamond_angle = (diamond_angle < fov_diamond_angle_0 ? MAX_DIAMOND_ANGLE : 0.0f) + diamond_angle - fov_diamond_angle_0;
+					for (uint32_t point_index = 0; point_index < polygon.PointCount; ++point_index)
+					{
+						const auto pt_next = points[point_index] - origin_local;
+						const auto diamond_angle = DiamondAngleFromVector(pt_next);
+						const auto rel_diamond_angle = (diamond_angle < fov_diamond_angle_0 ? MAX_DIAMOND_ANGLE : 0.0f) + diamond_angle - fov_diamond_angle_0;
+						if (crp(pt_prev, pt_next) >= 0 && TestLineSegmentAndCircleOverlap(pt_prev, pt_next, outer_clipping_radius, outer_clipping_radius_sqrd))
+						{
+							SAttrEdgeCalc attr_edge;
+							attr_edge.P0 = pt_prev;
+							attr_edge.P1 = pt_next;
+							attr_edge.RelDiamondAngle0 = prev_rel_diamond_angle;
+							attr_edge.RelDiamondAngle1 = rel_diamond_angle;
+							if (prev_rel_diamond_angle >= .5f * MAX_DIAMOND_ANGLE && rel_diamond_angle < .5f * MAX_DIAMOND_ANGLE)
+							{
+								// Straddling
+								attr_edge.RelDiamondAngle1 += MAX_DIAMOND_ANGLE;
+							}
+							attr_edge.Group = polygon.Group;
+							attr_edge.IndexInGroup = polygon.IndexInGroup;
+							m_TempAttrEdgeQueue.push_back(attr_edge);
+						}
+						pt_prev = pt_next;
+						prev_rel_diamond_angle = rel_diamond_angle;
+					}
+				});
+
+			if (!m_TempAttrEdgeQueue.empty())
+			{
+				if (desc.m_FieldOfViewDegrees < 360)
+				{
+					// Check polygon edges agains frustum clip edges
+					for (size_t i = 0; i < m_TempAttrEdgeQueue.size(); ++i)
+					{
+						auto& attr_edge = m_TempAttrEdgeQueue[i];
+						if (TestLineSegmentsIntersection(attr_edge.P0, attr_edge.P1, isovist_obj_points.back(), isovist_obj_points.front()) ||
+							TestLineSegmentsIntersection(attr_edge.P0, attr_edge.P1, isovist_obj_points.front(), isovist_obj_points[1]))
+						{
+							add_visible_object(attr_edge.Group, attr_edge.IndexInGroup);
+							attr_edge = m_TempAttrEdgeQueue.back();
+							m_TempAttrEdgeQueue.pop_back();
+							--i;
+						}
+					}
+				}
+
+				// Sort edges by RelDiamondAngle0
+				std::sort(m_TempAttrEdgeQueue.begin(), m_TempAttrEdgeQueue.end(), [](const auto& a, const auto& b) { return a.RelDiamondAngle0 < b.RelDiamondAngle0; });
+
+				class CIsovistEdgeIterator 
+				{
+				public:
+					CIsovistEdgeIterator() {}
+					CIsovistEdgeIterator(psta::span<float2> points, bool isLoop, float fov_diamond_angle_0)
+						: m_Points(points)
+						, m_IsLoop(isLoop)
+						, m_FovDiamondAngle0(fov_diamond_angle_0)
+						, m_At(0)
+					{
+						this->P1 = m_Points[0];
+						this->RelDiamondAngle1 = 0;
+					}
+
+					bool next()
+					{
+						this->P0 = this->P1;
+						this->RelDiamondAngle0 = this->RelDiamondAngle1;
+						if (m_At + 1 >= m_Points.size())
+						{
+							if (!m_IsLoop || m_At >= m_Points.size())
+							{
+								if (m_LapIndex > 0)
+								{
+									return false;
+								}
+								++m_LapIndex;
+								m_At = 0;
+								if (!m_IsLoop)
+								{
+									this->P0 = m_Points[0];
+									this->RelDiamondAngle0 = MAX_DIAMOND_ANGLE;
+								}
+							}
+							else
+							{
+								++m_At;
+								this->P1 = m_Points[0];
+								this->RelDiamondAngle1 = MAX_DIAMOND_ANGLE;
+								return true;
+							}
+						}
+						++m_At;
+						this->P1 = m_Points[m_At];
+						const auto diamond_angle = DiamondAngleFromVector(this->P1);
+						this->RelDiamondAngle1 = (diamond_angle < m_FovDiamondAngle0 ? MAX_DIAMOND_ANGLE : 0.0f) + diamond_angle - m_FovDiamondAngle0;
+						this->RelDiamondAngle1 += MAX_DIAMOND_ANGLE * m_LapIndex;
+						return true;
+					}
+
+					float RelDiamondAngle0;
+					float RelDiamondAngle1;
+					float2 P0;
+					float2 P1;
+
+				private:
+					bool m_IsLoop;
+					uint8_t m_LapIndex = 0;
+					float m_FovDiamondAngle0;
+					size_t m_At;
+					psta::span<float2> m_Points;
+				};
+
+				size_t attr_edges_beg = 0, attr_edges_end = 0;
+				CIsovistEdgeIterator isovistEdgeIterator;
+				if (desc.m_FieldOfViewDegrees < 360)
+				{
+					ASSERT(isovist_obj_points.front() == float2(0, 0));
+					isovistEdgeIterator = CIsovistEdgeIterator(psta::make_span(isovist_obj_points.data() + 1, isovist_obj_points.size() - 1), false, fov_diamond_angle_0);
+				}
+				else
+				{
+					isovistEdgeIterator = CIsovistEdgeIterator(psta::make_span(isovist_obj_points), true, fov_diamond_angle_0);
+				}
+
+				while (isovistEdgeIterator.next() && attr_edges_beg < m_TempAttrEdgeQueue.size())
+				{
+					for (; attr_edges_end < m_TempAttrEdgeQueue.size(); ++attr_edges_end)
+					{
+						auto& attr_edge = m_TempAttrEdgeQueue[attr_edges_end];
+						if (attr_edge.RelDiamondAngle0 > isovistEdgeIterator.RelDiamondAngle1)
+						{
+							break;
+						}
+						if (attr_edge.RelDiamondAngle0 >= isovistEdgeIterator.RelDiamondAngle0 && crp(isovistEdgeIterator.P1 - isovistEdgeIterator.P0, attr_edge.P0 - isovistEdgeIterator.P0) >= 0)
+						{
+							add_visible_object(attr_edge.Group, attr_edge.IndexInGroup);
+							attr_edge = m_TempAttrEdgeQueue[attr_edges_beg++];
+						}
+					}
+
+					for (size_t i = attr_edges_beg; i < attr_edges_end; ++i)
+					{
+						auto& attr_edge = m_TempAttrEdgeQueue[i];
+						if (attr_edge.RelDiamondAngle1 > isovistEdgeIterator.RelDiamondAngle0)
+						{
+							if (!TestLineSegmentsIntersection(isovistEdgeIterator.P0, isovistEdgeIterator.P1, attr_edge.P0, attr_edge.P1))
+							{
+								continue;
+							}
+							add_visible_object(attr_edge.Group, attr_edge.IndexInGroup);
+						}
+						attr_edge = m_TempAttrEdgeQueue[attr_edges_beg++];
+					}
+				}
+				
+				// Remove duplicates
+				{
+					m_TempIndexArray.resize(prev_temp_index_array_size + remove_duplicates(psta::make_span(m_TempIndexArray.data() + prev_temp_index_array_size, m_TempIndexArray.size() - prev_temp_index_array_size)));
+					auto* group_sizes = &m_TempIndexArray[base_visible_group_index];
+					for (uint32_t group_index = 0; group_index < m_AttractionPolygons.GroupCount; ++group_index)
+					{
+						group_sizes[group_index] = 0;
+					}
+					for (size_t i = prev_temp_index_array_size; i < m_TempIndexArray.size(); ++i)
+					{
+						const auto group_index = (m_TempIndexArray[i] >> 24) - base_visible_group_index;
+						group_sizes[group_index]++;
+					}
+				}
+			}
 			base_visible_group_index += m_AttractionPolygons.GroupCount;
 		}
 	}

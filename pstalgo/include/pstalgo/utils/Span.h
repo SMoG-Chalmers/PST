@@ -31,6 +31,7 @@ namespace psta
 	class span
 	{
 	public:
+		span() {}
 		span(T* elements, size_t size) : m_Data(elements), m_Size(size) {}
 		span(T* begin, T* end) : m_Data(begin), m_Size(end - begin) {}
 
@@ -52,8 +53,8 @@ namespace psta
 		const T* end() const { return m_Data + m_Size; }
 
 	protected:
-		T* m_Data;
-		size_t m_Size;
+		T* m_Data = nullptr;
+		size_t m_Size = 0;
 	};
 
 	template <class T>
