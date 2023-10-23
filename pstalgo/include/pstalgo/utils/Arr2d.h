@@ -150,10 +150,10 @@ namespace psta
 	{
 	public:
 		Arr2d(uint32_t width, uint32_t height)
-			: Arr2dView(nullptr, width, height, width)
+			: Arr2dView<T>(nullptr, width, height, width)
 			, m_Vec(width * height)
 		{
-			m_Elements = m_Vec.data();
+			Arr2dView<T>::m_Elements = m_Vec.data();
 		}
 
 	private:

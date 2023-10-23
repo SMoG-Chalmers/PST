@@ -31,7 +31,11 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 //  CBitVector
 //
 
-template <typename TWord = size_t>
+#ifdef PSTA_64
+	template <typename TWord = uint64_t>
+#else
+	template <typename TWord = uint32_t>
+#endif
 class bit_vector {
 
 // Data Members

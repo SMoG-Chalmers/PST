@@ -161,7 +161,7 @@ namespace psta
 	}
 
 	// Coordinates are expected to be relative to CENTER of upper left pixel in image.
-	static void RasterCapsulesToPatch(Arr2dView<float>& img, const array_view<std::pair<float2, float2>> lines, float radius, const array_view<float> scores)
+	static void RasterCapsulesToPatch(Arr2dView<float> img, const array_view<std::pair<float2, float2>> lines, float radius, const array_view<float> scores)
 	{
 		const auto radius_sqrd = radius * radius;
 		for (size_t i = 0; i < lines.size(); ++i)
@@ -265,6 +265,7 @@ namespace psta
 			{
 				return;
 			}
+			//(Arr2dView<float>& img, const array_view<std::pair<float2, float2>> lines, float radius, const array_view<float> scores)
 			RasterCapsulesToPatch(
 				img.sub_view(patch_bb.m_Min.x, patch_bb.m_Min.y, patch_bb.Width(), patch_bb.Height()),
 				make_array_view(lines_per_patch.data() + first_line_index, line_count),

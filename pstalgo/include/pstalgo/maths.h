@@ -132,7 +132,7 @@ inline float SyntaxAngleWeightFromDegrees(T degrees)
 template <typename TOut, typename TIn>
 const TOut SignVal(TIn value)
 {
-	return (TOut)(v >= 0) - (TOut)(v < 0)
+	return (TOut)(value >= 0) - (TOut)(value < 0);
 }
 
 

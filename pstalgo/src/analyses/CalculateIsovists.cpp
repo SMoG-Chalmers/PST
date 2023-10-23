@@ -200,7 +200,7 @@ private:
 	std::vector<std::pair<float2, float2>> m_Edges;
 	std::vector<uint32_t> m_PolygonIndexPerObstacle;;
 	std::vector<uint32_t> m_EdgeCountPerObstacle;
-	bit_vector<size_t> m_ObstacleVisibilityMask;
+	bit_vector<> m_ObstacleVisibilityMask;
 
 	ObjectPool<std::vector<float2>> m_LocalIsovistPool;
 	ObjectPool<std::vector<double2>> m_WorldIsovistPool;
@@ -372,25 +372,6 @@ float CalcRadForSegmentedCircle(int seg_count) {
 	return sqrt((float)PI / ((float)seg_count * sin(half_angle) * cos(half_angle)));
 }
 
-template <class T>
-static size_t CountPointsInIsovist(const TVec2<T>& origin, psta::span<TVec2<T>> perimeter, psta::span<TVec2<T>> points)
-{
-	if (!TestPointInRing(point, perimeter.data(), perimeter_size.size()))
-	{
-		return false;
-	}
-
-	for (const auto& hole : holes)
-	{
-		if (TestPointInRing(point, hole.data(), hole.size()))
-		{
-			return false;
-		}
-	}
-
-	return true;
-}
-
 // TODO: Move
 template <class T>
 size_t remove_duplicates(psta::span<T> items)
@@ -498,7 +479,7 @@ void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProg
 				for (uint32_t point_index = 0; point_index < polygon.PointCount; ++point_index)
 				{
 					const auto pt_next = points[point_index] - origin_local;
-					if (crp(pt_prev, pt_next) >= 0 && TestLineSegmentAndCircleOverlap(pt_prev, pt_next, outer_clipping_radius, outer_clipping_radius_sqrd))
+					if (crp(pt_prev, pt_next) >= 0 && TestLineSegmentAndCircleOverlap(pt_prev, pt_next, outer_clipping_radius))
 					{
 						auto edge = std::make_pair(pt_prev, pt_next);
 						if (needs_clipping)
@@ -560,7 +541,7 @@ void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProg
 	m_TempIndexArray.resize(total_visibility_group_count);
 	{
 		uint32_t base_visible_group_index = 0;
-		auto& add_visible_object = [&](uint32_t group_index, uint32_t index_in_group)
+		auto add_visible_object = [&](uint32_t group_index, uint32_t index_in_group)
 		{
 			++m_TempIndexArray[base_visible_group_index + group_index];
 			m_TempIndexArray.push_back(((base_visible_group_index + group_index) << 24) | (index_in_group & 0x00FFFFFF));
@@ -738,7 +719,7 @@ done:
 						const auto pt_next = points[point_index] - origin_local;
 						const auto diamond_angle = DiamondAngleFromVector(pt_next);
 						const auto rel_diamond_angle = (diamond_angle < fov_diamond_angle_0 ? MAX_DIAMOND_ANGLE : 0.0f) + diamond_angle - fov_diamond_angle_0;
-						if (crp(pt_prev, pt_next) >= 0 && TestLineSegmentAndCircleOverlap(pt_prev, pt_next, outer_clipping_radius, outer_clipping_radius_sqrd))
+						if (crp(pt_prev, pt_next) >= 0 && TestLineSegmentAndCircleOverlap(pt_prev, pt_next, outer_clipping_radius))
 						{
 							SAttrEdgeCalc attr_edge;
 							attr_edge.P0 = pt_prev;

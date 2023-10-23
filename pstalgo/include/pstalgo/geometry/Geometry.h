@@ -54,8 +54,10 @@ T DistanceFromPointToLineSegmentSqrd(const TVec2<T>& pt, const std::pair<TVec2<T
 }
 
 template <class T>
-inline bool TestLineSegmentAndCircleOverlap(const TVec2<T>& p0, const TVec2<T>& p1, T radius, T radius_sqrd = radius * radius)
+inline bool TestLineSegmentAndCircleOverlap(const TVec2<T>& p0, const TVec2<T>& p1, T radius)
 {
+	const T radius_sqrd = radius * radius;
+
 	if (p0.getLengthSqr() < radius_sqrd || p1.getLengthSqr() < radius_sqrd)
 	{
 		return true;

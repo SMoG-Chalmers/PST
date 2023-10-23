@@ -52,7 +52,7 @@ bool TestPointInRing(const T& point, const psta::span<T>& ring)
 template <class T>
 bool TestPointInPolygon(const TVec2<T>& point, psta::span<TVec2<T>> perimeter, psta::span<psta::span<TVec2<T>>> holes = psta::span<psta::span<TVec2<T>>>())
 {
-	if (!TestPointInRing(point, perimeter.data(), perimeter_size.size()))
+	if (!TestPointInRing(point, perimeter.data(), perimeter.size()))
 	{
 		return false;
 	}

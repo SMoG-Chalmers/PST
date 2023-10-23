@@ -20,24 +20,17 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #pragma once
+ 
+#if defined(__x86_64__) || defined(__ppc64__) || defined(__LP64__) || defined(_WIN64)
+	#define PSTA_64 1
+#else
+	#define PSTA_32 1
+#endif
 
 #ifdef WIN32
 	#define PSTA_WIN 1
-	#ifdef _WIN64
-		#define PSTA_64 1
-	#else
-		#define PSTA_32	1
-	#endif
-#endif
-
-// Check GCC
-#ifdef __GNUC__
+#elif defined __GNUC__
 	#define PSTA_GCC 1
-	#if defined(__x86_64__) || defined(__ppc64__)
-		#define PSTA_64 1
-	#else
-		#define PSTA_32 1
-	#endif
 #endif
 
 namespace psta

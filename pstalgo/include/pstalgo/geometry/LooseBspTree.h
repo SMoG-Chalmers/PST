@@ -97,7 +97,7 @@ namespace psta
 		template <class TFunc>
 		inline void ForEachSubRangeInBB(uint32_t node_index, const bb_t& bb, TFunc&& fn, std::pair<uint32_t, uint32_t>& pending_range);
 
-		inline static Node& NodeFromHandle(node_handle_t node_handle) { return *(SNode*)node_handle; }
+		inline static Node& NodeFromHandle(node_handle_t node_handle) { return *(Node*)node_handle; }
 
 		template <class TBBFromItem>
 		inline void CreateSubtree(uint32_t base_item_index, TItemIterator begin, TItemIterator end, size_t max_depth, size_t max_objects_per_leaf, TBBFromItem&& bbFromItem);
