@@ -36,6 +36,7 @@ from qgis.PyQt.QtGui import (
 	QBrush,
 	QPen,
 	QPainter,
+	QIcon,
 )
 
 from qgis.PyQt.QtWidgets import (
@@ -191,8 +192,10 @@ class LayerSelectionItemModel(QAbstractItemModel):
 				return self._items[rowIndex].layer.name()
 			if role == Qt.CheckStateRole:
 				return Qt.Checked if self._items[rowIndex].selected else Qt.Unchecked
+			if role == Qt.DecorationRole:
+				return self._items[rowIndex].icon
 		elif 1 == columnIndex:
-			if role == Qt.CheckStateRole and isPolygonLayer(self._items[rowIndex].layer):
+			if role == Qt.CheckStateRole:
 				return Qt.Checked if self._items[rowIndex].obstacle else Qt.Unchecked
 
 		return None
@@ -231,9 +234,13 @@ class LayerSelectionItemModel(QAbstractItemModel):
 	def flags(self, index):
 		if not index.isValid():
 			return Qt.NoItemFlags
-		flags = Qt.ItemIsSelectable
+		#flags = Qt.ItemIsSelectable
+		flags = Qt.NoItemFlags
+		flags |= Qt.ItemIsUserCheckable
 		if index.column() != 1 or isPolygonLayer(self._items[index.row()].layer):
-			flags |= Qt.ItemIsEnabled | Qt.ItemIsUserCheckable
+			flags |= Qt.ItemIsEnabled
+		# if index.column() != 1 or isPolygonLayer(self._items[index.row()].layer):
+		# 	flags |= Qt.ItemIsEnabled | Qt.ItemIsUserCheckable
 		return flags
 
 
@@ -252,15 +259,18 @@ class LayerCounterWidget(QTreeView):
 class LayerCounterItemModel(QAbstractItemModel):
 	def __init__(self, parent):
 		super().__init__(parent)
-		self._layerNames = []
+		self._isovistLayers = []
 
-	def setLayers(self, layerNames):
-		self._layerNames = layerNames
+	def notifyCountersChanged(self):
+		self.dataChanged.emit(self.index(0, 1), self.index(len(self._isovistLayers) - 1, 1))
+
+	def setLayers(self, isovistLayers):
+		self._isovistLayers = isovistLayers
 
 	def rowCount(self, parent=QModelIndex()):
 		if parent.isValid():
 			return 0  # This is a flat list; no child items.
-		return max(1, len(self._layerNames))
+		return max(1, len(self._isovistLayers))
 
 	def columnCount(self, parent=QModelIndex()):
 		if parent.isValid():
@@ -271,12 +281,12 @@ class LayerCounterItemModel(QAbstractItemModel):
 		columnIndex = index.column()
 		rowIndex = index.row()
 		if role == Qt.DisplayRole:
-			if not self._layerNames:
+			if not self._isovistLayers:
 				return "No layers" if columnIndex == 0 else None
 			if 0 == columnIndex:
-				return self._layerNames[rowIndex]
+				return self._isovistLayers[rowIndex].qgisLayer.name()
 			if 1 == columnIndex:
-				return "0"
+				return str(self._isovistLayers[rowIndex].visibleCount)
 		return None
 
 	def headerData(self, section, orientation, role=Qt.DisplayRole):
@@ -298,11 +308,9 @@ class LayerCounterItemModel(QAbstractItemModel):
 	def flags(self, index):
 		if not index.isValid():
 			return Qt.NoItemFlags
-		if not self._layerNames:
+		if not self._isovistLayers:
 			return Qt.NoItemFlags
 		return Qt.ItemIsSelectable | Qt.ItemIsEnabled
-
-
 
 
 class LayerListItem:
@@ -310,6 +318,17 @@ class LayerListItem:
 		self.layer = layer
 		self.selected = selected
 		self.obstacle = obstacle
+		self.icon = iconFromLayer(layer)
+
+
+def iconFromLayer(layer, width=16, height=16):
+	renderer = layer.renderer()
+	if renderer.type() == "singleSymbol":
+		symbol = renderer.symbol()
+		pixmap = symbol.asImage(QSize(width, height))
+		#return QIcon(pixmap)
+		return pixmap
+	return None
 
 
 class IsovistToolWindow(QWidget):
@@ -341,8 +360,7 @@ class IsovistToolWindow(QWidget):
 		self.direction = 0
 		self._color = DEFAULT_QCOLOR_INSIDE
 		self._opacity = DEFAULT_OPACITY
-		self._obstacleLayers = []
-		self._attractionLayers = []
+		self._layers = []
 
 		vlayout = QVBoxLayout()
 
@@ -357,7 +375,7 @@ class IsovistToolWindow(QWidget):
 		self.setLayout(vlayout)
 
 	def reset(self):
-		pass
+		self.setLayers([])
 
 	def color(self):
 		return self._color
@@ -398,8 +416,11 @@ class IsovistToolWindow(QWidget):
 	def setLayers(self, isovistLayers):
 		self._layers = list(isovistLayers)  # Clone
 		self._layerListModel.beginResetModel()
-		self._layerListModel.setLayers([isovistLayer.qgisLayer.name()for isovistLayer in isovistLayers])
+		self._layerListModel.setLayers(self._layers)
 		self._layerListModel.endResetModel()
+
+	def updateVisibilityCounters(self):
+		self._layerListModel.notifyCountersChanged()
 
 	def _createFields(self):
 		glayout = QGridLayout()
@@ -495,9 +516,13 @@ class IsovistToolWindow(QWidget):
 
 	def _onLayersClick(self):
 		layerItems = []
+		isovistLayersById = { isovistLayer.qgisLayer.id() : isovistLayer for isovistLayer in self._layers}
 		for layer in allLayers():
 			if isPointLayer(layer) or isPolygonLayer(layer):
-				layerItems.append(LayerListItem(layer, False, False))
+				isovistLayer = isovistLayersById.get(layer.id())
+				selected = isovistLayer is not None
+				obstacle = selected and isovistLayer.obstacle
+				layerItems.append(LayerListItem(layer, selected=selected, obstacle=obstacle))
 		dlg = LayerSelectionDialog(self, layerItems)
 		if QDialog.Accepted != dlg.exec():
 			return

@@ -61,3 +61,4 @@ class IsovistLayer:
 		self.obstacle = obstacle
 		self.featureIds = None
 		self.canvasItemsByIndex = {}
+		self.visibleCount = 0

@@ -139,8 +139,6 @@ class IsovistMapTool(QgsMapTool):
 		self._attractionPolygonLayers = []
 		self._toolWindow = None
 		self._area = 0
-		self._attractionCount = 0
-		self._obstacleCount = 0
 		QgsMapTool.__init__(self, canvas)
 
 	#def flags(self):
@@ -288,9 +286,15 @@ class IsovistMapTool(QgsMapTool):
 			viewCone.fieldOfView(), 
 			viewCone.viewDirection(), 
 			ISOVIST_PERIMETER_RESOLUTION)
+		# Update visibility count for each isovist layer
+		for visibleObjects, isovistLayers in [(visibleObstacles, self._obstacleLayers), (visibleAttractionPoints, self._attractionPointLayers), (visibleAttractionPolygons, self._attractionPolygonLayers)]:
+			assert(visibleObjects.GroupCount == len(isovistLayers))
+			for i in range(visibleObjects.GroupCount):
+				isovistLayers[i].visibleCount = visibleObjects.CountPerGroup[i]
+		# Update tool window
 		if self._toolWindow:
 			self._toolWindow.setArea(self._area)
-			# TODO: Set visibility counters
+			self._toolWindow.updateVisibilityCounters()
 
 		viewCone.setPolygonPoints(points, point_count)
 
@@ -403,13 +407,19 @@ class IsovistMapTool(QgsMapTool):
 		self.currentItem().setMapPosition(x, y)
 		self.currentItem().updatePosition()
 
+	def _pointFields(self):
+		return POINT_FIELDS + [(isovistLayer.qgisLayer.name(), QVariant.Int) for isovistLayer in self._isovistLayers()]
+
+	def _polygonFields(self):
+		return POLYGON_FIELDS + [(isovistLayer.qgisLayer.name(), QVariant.Int) for isovistLayer in self._isovistLayers()]
+
 	def addToPointLayer(self, layer):
 		if layer is None:
 			(layerName, ok) = QInputDialog.getText(self._toolWindow, "New point layer", "Layer name", text = "View points")
 			if not ok:
 				return
 			layer = self._createPointLayer(layerName)
-		elif not self._checkMissingAttributes(layer, POINT_FIELDS):
+		elif not self._checkMissingAttributes(layer, self._pointFields()):
 			return
 
 		viewCone = self.currentItem()
@@ -442,7 +452,7 @@ class IsovistMapTool(QgsMapTool):
 			if not ok:
 				return
 			layer = self._createPolygonLayer(layerName)
-		elif not self._checkMissingAttributes(layer, POLYGON_FIELDS):
+		elif not self._checkMissingAttributes(layer, self._polygonFields()):
 			return
 
 		viewCone = self.currentItem()
@@ -502,6 +512,8 @@ class IsovistMapTool(QgsMapTool):
 		values[FIELD_NAME_FOV]          = viewCone.fieldOfView()
 		values[FIELD_NAME_DIRECTION]    = viewCone.viewDirection()
 		values[FIELD_NAME_AREA]         = self._area
+		for isovistLayer in self._isovistLayers():
+			values[isovistLayer.qgisLayer.name().lower()] = isovistLayer.visibleCount
 		return values
 
 	def _createPointLayer(self, name):
@@ -509,7 +521,7 @@ class IsovistMapTool(QgsMapTool):
 		layer.startEditing()
 		layer.setCrs(QgsProject.instance().crs())
 		dataProvider = layer.dataProvider()
-		dataProvider.addAttributes([QgsField(name, dataType) for name, dataType in POINT_FIELDS])
+		dataProvider.addAttributes([QgsField(name, dataType) for name, dataType in self._pointFields()])
 		QgsProject.instance().addMapLayer(layer)
 		layer.updateFields()
 		layer.commitChanges()
@@ -522,7 +534,7 @@ class IsovistMapTool(QgsMapTool):
 		layer.renderer().setSymbol(symbol)
 		layer.setCrs(QgsProject.instance().crs())
 		dataProvider = layer.dataProvider()
-		dataProvider.addAttributes([QgsField(name, dataType) for name, dataType in POLYGON_FIELDS])
+		dataProvider.addAttributes([QgsField(name, dataType) for name, dataType in self._polygonFields()])
 		layer.updateFields()
 		layer.commitChanges()
 		QgsProject.instance().addMapLayer(layer)
@@ -545,6 +557,9 @@ class IsovistMapTool(QgsMapTool):
 		self._obstacleLayers = [isovistLayer for isovistLayer in isovistLayers if isovistLayer.obstacle]
 		self._attractionPointLayers = [isovistLayer for isovistLayer in isovistLayers if not isovistLayer.obstacle and isPointLayer(isovistLayer.qgisLayer)]
 		self._attractionPolygonLayers = [isovistLayer for isovistLayer in isovistLayers if not isovistLayer.obstacle and isPolygonLayer(isovistLayer.qgisLayer)]
+
+	def _isovistLayers(self):
+		return self._obstacleLayers + self._attractionPointLayers + self._attractionPolygonLayers
 
 	def _recreateIsovistContext(self):
 		self._freeIsovist()
