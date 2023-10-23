@@ -458,15 +458,14 @@ void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProg
 
 	// Add edges from polygons
 	{
-		bool done = false;  // TODO: Do this with cancellation token instead
 		m_Obstacles.Tree.VisitItems(
 			[&](const bb_t& bb) -> bool
 			{
-				return !done && bb.OverlapsCircle(origin_local, outer_clipping_radius);
+				return bb.OverlapsCircle(origin_local, outer_clipping_radius);
 			},
 			[&](const SPolygon& polygon)
 			{
-				if (done || !polygon.BB.OverlapsCircle(origin_local, outer_clipping_radius))
+				if (!polygon.BB.OverlapsCircle(origin_local, outer_clipping_radius))
 				{
 					return;
 				}
@@ -476,7 +475,6 @@ void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProg
 				if (polygon.BB.Contains(origin_local.x, origin_local.y) && TestPointInRing(origin_local, psta::make_span(points, polygon.PointCount)))
 				{
 					// Origin is inside a polygon
-					done = true;
 					return;
 				}
 
@@ -527,11 +525,6 @@ void CIsovistContext::CalculateIsovist(SCalculateIsovistDesc& desc, CPSTAlgoProg
 				m_PolygonIndexPerObstacle.push_back((uint32_t)(&polygon - m_Obstacles.Polygons.data()));
 				m_EdgeCountPerObstacle.push_back((uint32_t)(m_Edges.size() - prev_edge_count));
 			});
-
-		if (done)
-		{
-			return;
-		}
 	}
 
 	auto isovist_points = m_LocalIsovistPool.Borrow();
