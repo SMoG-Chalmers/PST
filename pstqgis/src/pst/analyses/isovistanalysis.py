@@ -19,20 +19,31 @@ You should have received a copy of the GNU Lesser General Public License
 along with PST. If not, see <http://www.gnu.org/licenses/>.
 """
 
-from builtins import range
-from builtins import object
+from qgis.core import (
+		Qgis,
+		QgsFeature,
+		QgsField,
+		QgsFillSymbol,
+		QgsVectorLayer,
+		QgsMapLayerType,
+		QgsPoint,
+		QgsPointXY,
+		QgsProject,
+		QgsGeometry,
+)
+from builtins import range, object
 import array, ctypes
 from ..model import GeometryType
 from .base import BaseAnalysis
 from .memory import stack_allocator
 from .utils import MultiTaskProgressDelegate
+from ..maptools.isovist.common import allLayers, isPointLayer, isPolygonLayer, FIELD_NAME_X, FIELD_NAME_Y, FIELD_NAME_MAX_DISTANCE, FIELD_NAME_FOV, FIELD_NAME_DIRECTION, FIELD_NAME_AREA, POINT_FIELDS, POLYGON_FIELDS, CreateIsovistContext, CreateIsovistPolygonLayer, ISOVIST_PERIMETER_RESOLUTION
 
 
 class Tasks(object):
-	READ_ORIGINS = 1
-	READ_OBSTACLES = 2
-	ANALYSIS = 3
-	CREATE_ISOVISTS_LAYER = 4
+	CREATE_ISOVIST_CONTEXT = 1
+	ANALYSIS = 2
+	CREATE_ISOVISTS_LAYER = 3
 
 
 class IsovistAnalysis(BaseAnalysis):
@@ -49,50 +60,86 @@ class IsovistAnalysis(BaseAnalysis):
 		model = self._model
 
 		progress = MultiTaskProgressDelegate(delegate)
-		progress.addTask(Tasks.READ_ORIGINS, 1, None)
-		progress.addTask(Tasks.READ_OBSTACLES, 1, None)
+		progress.addTask(Tasks.CREATE_ISOVIST_CONTEXT, 1, None)
 		progress.addTask(Tasks.ANALYSIS, 1, None)
 		progress.addTask(Tasks.CREATE_ISOVISTS_LAYER, 1, None)
 
+		qgisLayersByName = {qgisLayer.name() : qgisLayer for qgisLayer in allLayers()}
+
 		algo = None
 
-		initial_alloc_state = stack_allocator.state()
-
+		max_view_distance = props['max_view_distance']
+		visibilityCounters = {}
+		fieldValues = {}
+		isovistContext = None
 		try:
-			progress.setCurrentTask(Tasks.READ_ORIGINS)
-			progress.setStatus("Reading points from '%s'" % props['in_origins'])
-			origin_coords = pstalgo.Vector(ctypes.c_double, model.rowCount(props['in_origins'])*2, stack_allocator)
-			model.readPoints(props['in_origins'], origin_coords, None, progress)
+			# Build context
+			progress.setCurrentTask(Tasks.CREATE_ISOVIST_CONTEXT)
+			obstacleLayers = [qgisLayersByName[layerName] for layerName in props['obstacles']]
+			attractionLayers = [qgisLayersByName[layerName] for layerName in props['attractions']]
+			attractionPointLayers = [qgisLayer for qgisLayer in attractionLayers if isPointLayer(qgisLayer)]
+			attractionPolygonLayers = [qgisLayer for qgisLayer in attractionLayers if isPolygonLayer(qgisLayer)]
+			isovistContext = CreateIsovistContext(self._model, obstacleLayers, attractionPointLayers, attractionPolygonLayers, progressContext=progress)
 
-			progress.setCurrentTask(Tasks.READ_OBSTACLES)
-			progress.setStatus("Reading polygons from '%s'" % props['in_obstacles'])
-			point_count_per_polygon = pstalgo.Vector(ctypes.c_uint, model.rowCount(props['in_obstacles']), stack_allocator)
-			polygon_coords = model.readPolygons(props['in_obstacles'], point_count_per_polygon, None, progress)
+			counterNames = props['obstacles'] + props['attractions']
+			outputLayer = CreateIsovistPolygonLayer(layerName="isovists", counterNames=counterNames)
+			if not outputLayer.isEditable():
+				outputLayer.startEditing()
+			outputFieldNames = [field.name() for field in outputLayer.fields()]
 
+			# Generate isovists
 			progress.setCurrentTask(Tasks.ANALYSIS)
 			progress.setStatus("Calculating isovists")
-			(res, algo) = pstalgo.CalculateIsovists(point_count_per_polygon, polygon_coords, origin_coords, props['max_viewing_distance'], int(props['perimeter_resolution']), progress)
+			for (originX, originY) in self._model.points(props['in_origins']):
+				isovistHandle = None
+				try:
+					(point_count, points, isovistHandle, area, visibleObstacles, visibleAttractionPoints, visibleAttractionPolygons) = pstalgo.CalculateIsovist(
+						isovistContext, 
+						originX, originY, 
+						max_view_distance, 
+						360, 
+						0, 
+						ISOVIST_PERIMETER_RESOLUTION)
 
-			def polygon_gen(polygon_count, point_count_per_polygon, polygon_coords):
-				coord_index = 0
-				for polygon_index in range(polygon_count):
-					point_count = point_count_per_polygon[polygon_index]
-					yield model.createPolygonFromCoordinateElements(polygon_coords, point_count, coord_index)
-					coord_index += point_count * 2
+					# Visibility counters
+					for visibleObjects, qgisLayers in [(visibleObstacles, obstacleLayers), (visibleAttractionPoints, attractionPointLayers), (visibleAttractionPolygons, attractionPolygonLayers)]:
+						assert(visibleObjects.GroupCount == len(qgisLayers))
+						for i in range(visibleObjects.GroupCount):
+							visibilityCounters[qgisLayers[i].name()] = visibleObjects.CountPerGroup[i]
 
-			progress.setCurrentTask(Tasks.CREATE_ISOVISTS_LAYER)
-			output_table_name = 'Isovists'
-			progress.setStatus("Writing table '%s'" % output_table_name)
-			model.createTable(
-				output_table_name,
-				model.coordinateReferenceSystem(props['in_origins']),
-				[],
-				polygon_gen(res.m_IsovistCount, res.m_PointCountPerIsovist, res.m_IsovistPoints),
-				res.m_IsovistCount,
-				progress,
-				geo_type=GeometryType.POLYGON)
+					# Create output record and feature
+					feature = QgsFeature()
+
+					# Geometry
+					map_points = [QgsPointXY(points[i * 2], points[i * 2 + 1]) for i in range(point_count)]
+					layer_points = map_points  # [self.toLayerCoordinates(layer, point) for point in map_points]
+					feature.setGeometry(QgsGeometry.fromPolygonXY([layer_points]))
+
+					# Attributes
+					fieldValues[FIELD_NAME_X]            = originX
+					fieldValues[FIELD_NAME_Y]            = originY
+					fieldValues[FIELD_NAME_MAX_DISTANCE] = max_view_distance
+					fieldValues[FIELD_NAME_FOV]          = 360
+					fieldValues[FIELD_NAME_DIRECTION]    = 0
+					fieldValues[FIELD_NAME_AREA]         = area
+					for name, value in visibilityCounters.items():
+						fieldValues[name.lower()] = value
+					feature.initAttributes(len(outputFieldNames))
+					for fieldIndex, fieldName in enumerate(outputFieldNames):
+						value = fieldValues.get(fieldName.lower())
+						if value is not None:
+							feature.setAttribute(fieldIndex, value)
+
+					outputLayer.addFeature(feature)
+					
+				finally:
+					if isovistHandle != None:
+						pstalgo.Free(isovistHandle)
+						isovistHandle = None
+
+			outputLayer.commitChanges()
 
 		finally:
-			stack_allocator.restore(initial_alloc_state)
-			if algo is not None:
-				pstalgo.Free(algo)
+			if isovistContext != None:
+				pstalgo.Free(isovistContext)
+				isovistContext = None

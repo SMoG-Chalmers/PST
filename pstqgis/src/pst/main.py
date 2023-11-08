@@ -119,20 +119,9 @@ class PSTPlugin(object):
 			('Attraction Distance',    lambda : self.onAnalysis(wizards.AttractionDistanceWiz,    analyses.AttractionDistanceAnalysis), None),
 			('Attraction Reach',       lambda : self.onAnalysis(wizards.AttractionReachWiz,       analyses.AttractionReachAnalysis), None),
 			('Attraction Betweenness', lambda : self.onAnalysis(wizards.AttractionBetweennessWiz, analyses.AttractionBetweennessAnalysis), None),
+			None,
+			('Create Isovists',        lambda : self.onAnalysis(wizards.IsovistWiz,               analyses.IsovistAnalysis), None),
 		]
-
-		if ENABLE_EXPERIMENTAL_ANALYSES:
-			from .analyses import SegmentGroupingAnalysis, SegmentGroupIntegrationAnalysis
-			ACTIONS += [
-				None,
-				('Segment Grouping',          lambda : self.onAnalysis(wizards.SegmentGroupingWiz,         analyses.SegmentGroupingAnalysis),         None),
-				('Segment Group Integration', lambda : self.onAnalysis(wizards.SegmentGroupIntegrationWiz, analyses.SegmentGroupIntegrationAnalysis), None),
-			]
-
-		if ENABLE_MAP_TOOLS:
-			ACTIONS += [
-				None,
-			]
 
 		actions = []
 		for a in ACTIONS:
@@ -148,6 +137,14 @@ class PSTPlugin(object):
 
 		if ENABLE_MAP_TOOLS:
 			actions.append(self.createMapToolAction(IsovistMapTool(self.iface, self.iface.mapCanvas(), self._model),  "Isovist tool", "img/isovist_tool.png"))
+
+		if ENABLE_EXPERIMENTAL_ANALYSES:
+			from .analyses import SegmentGroupingAnalysis, SegmentGroupIntegrationAnalysis
+			ACTIONS += [
+				None,
+				('Segment Grouping',          lambda : self.onAnalysis(wizards.SegmentGroupingWiz,         analyses.SegmentGroupingAnalysis),         None),
+				('Segment Group Integration', lambda : self.onAnalysis(wizards.SegmentGroupIntegrationWiz, analyses.SegmentGroupIntegrationAnalysis), None),
+			]
 
 		return actions
 

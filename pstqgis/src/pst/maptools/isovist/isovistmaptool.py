@@ -4,7 +4,7 @@ Copyright 2019 Meta Berghauser Pont
 This file is part of PST.
 
 PST is free software: you can redistribute it and/or modify
-it under the terms of the GNU Lesser General Public License as published by
+it unrder the terms of the GNU Lesser General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version. The GNU Lesser General Public License
 is intended to guarantee your freedom to share and change all versions
@@ -60,7 +60,6 @@ from qgis.gui import (
 		QgsMapTool,
 )
 
-from ...analyses.memory import stack_allocator
 from ...model import GeometryType
 from ...ui.widgets import ProgressDialog
 from .isovistmapcanvasitem import IsovistMapCanvasItem
@@ -68,6 +67,7 @@ from .isovisttoolwindow import IsovistToolWindow
 from .mapcanvasitems import CircleMapCanvasItem, PolygonMapCanvasItem, PathMapCanvasItem
 
 from .common import (
+	ISOVIST_PERIMETER_RESOLUTION,
 	POINT_FIELDS, 
 	POLYGON_FIELDS, 
 	FIELD_NAME_X, 
@@ -79,10 +79,10 @@ from .common import (
 	isPointLayer, 
 	isPolygonLayer, 
 	IsovistLayer,
+	CreateIsovistContext,
 )
 
 
-ISOVIST_PERIMETER_RESOLUTION = 64
 MAX_CONE_COUNT = 30
 
 ENABLE_LOGGING = True
@@ -119,6 +119,8 @@ def QColorToHtml(color):
 	if color.alpha() == 255:
 		return "#%.2x%.2x%.2x" % (color.red(), color.green(), color.blue())
 	return "#%.2x%.2x%.2x%.2x" % (color.alpha(), color.red(), color.green(), color.blue())
+
+
 
 
 class IsovistMapTool(QgsMapTool):
@@ -208,67 +210,17 @@ class IsovistMapTool(QgsMapTool):
 		self._toolWindow.setOpacity(color.alpha())
 
 	def _createIsovistContext(self, obstacleLayers, attractionPointLayers, attractionPolygonLayers, progressContext = None):
-		# Load pstalgo here when it is needed instead of on plugin load
-
-		if not self.pstalgo:
-			import pstalgo
-			self.pstalgo = pstalgo
-		initial_alloc_state = stack_allocator.state()
-		try:
-			isovistContextGeometry = self.pstalgo.IsovistContextGeometry()
-
-			def ReadPoints(isovistLayers, outPoints):
-				if isovistLayers:
-					point_count_per_group = self.pstalgo.Vector(ctypes.c_uint, len(isovistLayers), stack_allocator)
-					max_point_count = 0
-					for isovistLayer in isovistLayers:
-						max_point_count += self.model.rowCount(isovistLayer.qgisLayer.name())
-					coords = self.pstalgo.Vector(ctypes.c_double, max_point_count * 2, stack_allocator)
-					for isovistLayer in isovistLayers:
-						prevCoordCount = int(len(coords) / 2)
-						isovistLayer.featureIds = []
-						self.model.readPoints(isovistLayer.qgisLayer.name(), coords, out_rowids=isovistLayer.featureIds, progress=progressContext)
-						point_count_per_group.append(int(len(coords) / 2) - prevCoordCount)
-				else:
-					point_count_per_group = None
-					coords = None
-				outPoints.pointCountPerGroup = point_count_per_group
-				outPoints.coords = coords
-
-			def ReadPolygons(isovistLayers, outPolygons):
-				if isovistLayers:
-					polygon_count_per_group = self.pstalgo.Vector(ctypes.c_uint, len(isovistLayers), stack_allocator)
-					max_polygon_count = 0
-					for isovistLayer in isovistLayers:
-						max_polygon_count += self.model.rowCount(isovistLayer.qgisLayer.name())
-					point_count_per_polygon = self.pstalgo.Vector(ctypes.c_uint, max_polygon_count, stack_allocator)
-					polygon_points = None
-					for isovistLayer in isovistLayers:
-						prevPolyCount = len(point_count_per_polygon)
-						isovistLayer.featureIds = []
-						polygon_points = self.model.readPolygons(isovistLayer.qgisLayer.name(), point_count_per_polygon, out_rowids=isovistLayer.featureIds, progress=progressContext, out_coords = polygon_points)
-						polygon_count_per_group.append(len(point_count_per_polygon) - prevPolyCount)
-				else:
-					polygon_count_per_group = None
-					point_count_per_polygon = None
-					polygon_points = None
-				outPolygons.polygonCountPerGroup = polygon_count_per_group
-				outPolygons.pointCountPerPolygon = point_count_per_polygon
-				outPolygons.coords = polygon_points
-
-			ReadPolygons(obstacleLayers, isovistContextGeometry.obstaclePolygons)
-			ReadPoints(attractionPointLayers, isovistContextGeometry.attractionPoints)
-			ReadPolygons(attractionPolygonLayers, isovistContextGeometry.attractionPolygons)
-
-			if progressContext:
-				progressContext.setProgress(1)
-
-			# Create context
-			isovistContext = self.pstalgo.CreateIsovistContext(isovistContextGeometry)
-
-			return isovistContext
-		finally:
-			stack_allocator.restore(initial_alloc_state)
+		feature_ids_per_layer = {}
+		isovistContext = CreateIsovistContext(
+			self.model, 
+			[isovistLayer.qgisLayer for isovistLayer in obstacleLayers],
+			[isovistLayer.qgisLayer for isovistLayer in attractionPointLayers],
+			[isovistLayer.qgisLayer for isovistLayer in attractionPolygonLayers],
+			outFeatureIdsPerLayer = feature_ids_per_layer,
+			progressContext=progressContext)
+		for isovistLayer in obstacleLayers + attractionPointLayers + attractionPolygonLayers:
+			isovistLayer.featureIds = feature_ids_per_layer[isovistLayer.qgisLayer.id()]
+		return isovistContext
 
 	def mapCenter(self):
 		canvasCenter = QPoint(int(self.canvas.width() / 2), int(self.canvas.height() / 2))
@@ -279,6 +231,9 @@ class IsovistMapTool(QgsMapTool):
 		viewCone = self.currentItem()
 		if not viewCone:
 			return
+		if not self.pstalgo:
+			import pstalgo
+			self.pstalgo = pstalgo
 		(point_count, points, self.isovistHandle, self._area, visibleObstacles, visibleAttractionPoints, visibleAttractionPolygons) = self.pstalgo.CalculateIsovist(
 			self.isovistContext, 
 			originX, originY, 

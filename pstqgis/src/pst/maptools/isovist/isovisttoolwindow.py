@@ -75,7 +75,8 @@ from qgis.core import (
 )
 
 from ...ui.widgets import ColorPicker
-from .common import isPointLayer, isPolygonLayer, IsovistLayer
+from .common import isPointLayer, isPolygonLayer, IsovistLayer, allLayers, allPointLayers, allPolygonLayers
+from .layerselection import LayerSelectionDialog, LayerSelectionItem
 
 DEFAULT_QCOLOR_INSIDE = QColor("#fce94f")
 DEFAULT_OPACITY = 128
@@ -85,21 +86,6 @@ def clamp(value, minValue, maxValue):
 
 def log(msg):
 	QgsMessageLog.logMessage("(IsovistToolWindow) " + msg, 'PST', level=Qgis.Info)
-
-def allPointLayers():
-	return [layer for layer in allLayers() if isPointLayer(layer)]
-
-def allPolygonLayers():
-	return [layer for layer in allLayers() if isPolygonLayer(layer)]
-
-def allLayers():
-	return QgsProject.instance().mapLayers().values()
-
-def layerFromId(id):
-	for layer in allLayers():
-		if layer.id() == id:
-			return layer
-	return None
 
 
 class MultiSelListDialog(QDialog):
@@ -133,115 +119,6 @@ class MultiSelListDialog(QDialog):
 
 	def _onCancel(self):
 		pass
-
-
-class LayerSelectionDialog(QDialog):
-	def __init__(self, parent, layerListItems):
-		QWidget.__init__(self, parent, Qt.Tool)
-
-		self.setWindowTitle("Select Layers")
-
-		vlayout = QVBoxLayout()
-
-		self._list = QTreeView(self)
-		self._list.setIndentation(0)  # Hide expand/collapse decorators
-		self._listModel = LayerSelectionItemModel(self, layerListItems)
-		self._list.setModel(self._listModel)
-		vlayout.addWidget(self._list)
-
-		vlayout.addSpacing(10)
-
-		hlayout = QHBoxLayout()
-		self._okButton = QPushButton("OK")
-		self._okButton.clicked.connect(self.accept)
-		hlayout.addWidget(self._okButton)
-		self._cancelButton = QPushButton("Cancel")
-		self._cancelButton.clicked.connect(self.reject)
-		hlayout.addWidget(self._cancelButton)
-		vlayout.addLayout(hlayout)
-
-		self.setLayout(vlayout)
-
-
-class LayerSelectionItemModel(QAbstractItemModel):
-	def __init__(self, parent, layerListItems):
-		super().__init__(parent)
-		self._items = layerListItems
-
-	def rowCount(self, parent=QModelIndex()):
-		if parent.isValid():
-			return 0  # This is a flat list; no child items.
-		return len(self._items)
-
-	def columnCount(self, parent=QModelIndex()):
-		if parent.isValid():
-			return 0  # This is a flat list; no child items.
-		return 2
-
-	def data(self, index, role=Qt.DisplayRole):
-		# if not index.isValid() or \
-		#	not (0 <= index.row() < len(self._data)) or \
-		#	not (0 <= index.column() < len(self._data[0])):
-		#	 return None
-
-		columnIndex = index.column()
-		rowIndex = index.row()
-
-		if 0 == columnIndex:
-			if role == Qt.DisplayRole:
-				return self._items[rowIndex].layer.name()
-			if role == Qt.CheckStateRole:
-				return Qt.Checked if self._items[rowIndex].selected else Qt.Unchecked
-			if role == Qt.DecorationRole:
-				return self._items[rowIndex].icon
-		elif 1 == columnIndex:
-			if role == Qt.CheckStateRole:
-				return Qt.Checked if self._items[rowIndex].obstacle else Qt.Unchecked
-
-		return None
-
-	def setData(self, index, value, role=Qt.EditRole):
-		columnIndex = index.column()
-		rowIndex = index.row()
-
-		if role == Qt.CheckStateRole:
-			checked = (value == Qt.Checked)
-			if columnIndex == 0:
-				self._items[rowIndex].selected = checked
-				return True
-			if columnIndex == 1:
-				self._items[rowIndex].obstacle = checked
-				return True
-
-		return False
-
-	def headerData(self, section, orientation, role=Qt.DisplayRole):
-		if role == Qt.DisplayRole and orientation == Qt.Horizontal:
-			if section == 0:
-				return "Layer"
-			elif section == 1:
-				return "Obstacle"
-		return None
-
-	def index(self, row, column, parent=QModelIndex()):
-		if parent.isValid() or row < 0 or row >= self.rowCount() or column < 0 or column >= self.columnCount():
-			return QModelIndex()
-		return self.createIndex(row, column)
-
-	def parent(self, index=QModelIndex()):
-		return QModelIndex()  # This is a flat list; no parent.
-
-	def flags(self, index):
-		if not index.isValid():
-			return Qt.NoItemFlags
-		#flags = Qt.ItemIsSelectable
-		flags = Qt.NoItemFlags
-		flags |= Qt.ItemIsUserCheckable
-		if index.column() != 1 or isPolygonLayer(self._items[index.row()].layer):
-			flags |= Qt.ItemIsEnabled
-		# if index.column() != 1 or isPolygonLayer(self._items[index.row()].layer):
-		# 	flags |= Qt.ItemIsEnabled | Qt.ItemIsUserCheckable
-		return flags
 
 
 class LayerCounterWidget(QTreeView):
@@ -311,24 +188,6 @@ class LayerCounterItemModel(QAbstractItemModel):
 		if not self._isovistLayers:
 			return Qt.NoItemFlags
 		return Qt.ItemIsSelectable | Qt.ItemIsEnabled
-
-
-class LayerListItem:
-	def __init__(self, layer, selected, obstacle):
-		self.layer = layer
-		self.selected = selected
-		self.obstacle = obstacle
-		self.icon = iconFromLayer(layer)
-
-
-def iconFromLayer(layer, width=16, height=16):
-	renderer = layer.renderer()
-	if renderer.type() == "singleSymbol":
-		symbol = renderer.symbol()
-		pixmap = symbol.asImage(QSize(width, height))
-		#return QIcon(pixmap)
-		return pixmap
-	return None
 
 
 class IsovistToolWindow(QWidget):
@@ -515,18 +374,18 @@ class IsovistToolWindow(QWidget):
 		return hlayout
 
 	def _onLayersClick(self):
-		layerItems = []
 		isovistLayersById = { isovistLayer.qgisLayer.id() : isovistLayer for isovistLayer in self._layers}
+		layerSelectionItems = []
 		for layer in allLayers():
 			if isPointLayer(layer) or isPolygonLayer(layer):
 				isovistLayer = isovistLayersById.get(layer.id())
 				selected = isovistLayer is not None
 				obstacle = selected and isovistLayer.obstacle
-				layerItems.append(LayerListItem(layer, selected=selected, obstacle=obstacle))
-		dlg = LayerSelectionDialog(self, layerItems)
+				layerSelectionItems.append(LayerSelectionItem(layer, selected=selected, obstacle=obstacle))
+		dlg = LayerSelectionDialog(self, layerSelectionItems)
 		if QDialog.Accepted != dlg.exec():
 			return
-		isovistLayers = [IsovistLayer(layerItem.layer, layerItem.obstacle) for layerItem in layerItems if layerItem.selected]
+		isovistLayers = [IsovistLayer(item.qgisLayer, item.obstacle) for item in layerSelectionItems if item.selected]
 		self.setLayers(isovistLayers)
 		self.layersSelected.emit(isovistLayers)
 

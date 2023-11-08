@@ -28,6 +28,17 @@ from ... import APP_TITLE
 
 BASE_TITLE = APP_TITLE
 
+class WizPropBase(object):
+	def value(self):
+		return None
+	def default(self):
+		return None
+	def setValue(self, value):
+		raise NotImplementedError("The method 'setValue' is not implemented!")
+	def toString(self):
+		return str(self.value())
+
+
 class WizProp(object):
 	def __init__(self, widget, default):
 		self._widget = widget

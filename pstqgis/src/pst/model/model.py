@@ -252,6 +252,14 @@ class QGISModel(object):
 		if progress is not None:
 			progress.setProgress(1)
 
+	def points(self, table_name):
+		layer = self._layerFromName(table_name)
+		for feature in layer.getFeatures():
+			g = feature.geometry()
+			if g is not None:
+				point = g.centroid().asPoint()
+				yield (point.x(), point.y())
+
 	def readLines(self, table_name, out_coords, out_rowids, progress = None):
 		layer = self._layerFromName(table_name)
 		num_features = layer.featureCount()
