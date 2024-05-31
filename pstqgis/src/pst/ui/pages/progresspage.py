@@ -101,7 +101,7 @@ class ProgressPage(QWizardPage):
 
 	# AnalysisDelegate interface
 	def setProgress(self, progress):
-		self._progressBar.setValue(1000 * progress)
+		self._progressBar.setValue(int(round(1000 * progress)))
 		QApplication.processEvents()  # UI update
 
 	# AnalysisDelegate interface
