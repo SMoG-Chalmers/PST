@@ -106,10 +106,16 @@ class NetworkPage(BasePage):
 	def onNetworkTypeComboChanged(self, index):
 		self.updateUnlinksAvailability()
 
+	def _selectedNetworkType(self):
+		selectedNetworkTypeText = self._networkTypeCombo.currentText()
+		if selectedNetworkTypeText:
+			import pstalgo  # Do it here when it is needed instead of on plugin load
+			return pstalgo.RoadNetworkType.FromString(selectedNetworkTypeText)
+		return None
+
 	def updateUnlinksAvailability(self):
 		import pstalgo  # Do it here when it is needed instead of on plugin load
-		networkType = pstalgo.RoadNetworkType.FromString(self._networkTypeCombo.currentText())
-		unlinksAvailable = (networkType == pstalgo.RoadNetworkType.AXIAL_OR_SEGMENT)
+		unlinksAvailable = (self._selectedNetworkType() == pstalgo.RoadNetworkType.AXIAL_OR_SEGMENT)
 		self._unlinksCheck.setVisible(unlinksAvailable)
 		self._unlinksCombo.setVisible(unlinksAvailable)
 
