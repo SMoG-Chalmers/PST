@@ -24,7 +24,7 @@ from .attractiondistance import AttractionDistance
 from .attractionreach import AttractionReach, AttractionScoreAccumulationMode, AttractionWeightFunction, AttractionDistributionFunc, AttractionCollectionFunc
 from .calculateisovists import CreateIsovistContext, CalculateIsovist, IsovistContextGeometry
 from .callbacktest import CallbackTest
-from .createbufferpolygons import CreateBufferPolygons
+from .createbufferpolygons import CompareResults, CompareResultsMode, RasterToPolygons
 from .creategraph import CreateGraph, FreeGraph, GetGraphInfo, GetGraphLineLengths, GetGraphCrossingCoords, CreateSegmentGraph, FreeSegmentGraph, CreateSegmentGroupGraph, FreeSegmentGroupGraph
 from .createjunctions import CreateJunctions
 from .createsegmentmap import CreateSegmentMap

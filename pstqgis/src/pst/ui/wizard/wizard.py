@@ -109,10 +109,17 @@ class WizPropFloat(WizProp):
 		self._decimals = decimals
 
 	def value(self):
-		return float(WizProp.value(self))
+		try:
+			return float(WizProp.value(self))
+		except:
+			return self._default
 
 	def toString(self, value):
-		return ("%%.%df" % self._decimals) % value
+		try:
+			float_value = float(value)
+		except:
+			float_value = self._default
+		return ("%%.%df" % self._decimals) % float_value
 
 
 class WizPropRadio(object):

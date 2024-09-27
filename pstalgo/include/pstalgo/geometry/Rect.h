@@ -44,6 +44,8 @@ public:
 	inline explicit operator TRect<TOther>() const { return TRect<TOther>((TOther)m_Left, (TOther)m_Top, (TOther)m_Right, (TOther)m_Bottom); }
 
 	inline bool operator==(const TRect& other) const { return other.m_Left == m_Left && other.m_Top == m_Top &&other.m_Right == m_Right &&other.m_Bottom == m_Bottom; }
+	inline const TVec2<T>& Min() const { return m_Min; }
+	inline const TVec2<T>& Max() const { return m_Max; }
 	inline T Width() const { return m_Right - m_Left; }
 	inline T Height() const { return m_Bottom - m_Top; }
 	inline TVec2<T> Size() const { return TVec2<T>(Width(), Height()); }

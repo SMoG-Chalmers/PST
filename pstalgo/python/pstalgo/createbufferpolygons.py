@@ -19,50 +19,51 @@ You should have received a copy of the GNU Lesser General Public License
 along with PST. If not, see <http://www.gnu.org/licenses/>.
 """
 
-import ctypes
-from ctypes import byref, cdll, POINTER, Structure, c_double, c_float, c_int, c_uint, c_void_p, c_bool
+import array
+from ctypes import byref, cdll, POINTER, Structure, c_double, c_float, c_uint, c_void_p
 from .common import _DLL, PSTALGO_PROGRESS_CALLBACK, DOUBLE_PTR, CreateCallbackWrapper, UnpackArray, DumpStructure
 
-class SCreateBufferPolygonsDesc(Structure) :
+
+class CompareResultsMode:
+	NORMALIZED = 0
+	RELATIVE_PERCENT = 1
+
+
+class SCompareResultsDesc(Structure) :
 	_fields_ = [
 		("Version", c_uint),
 		("LineCount1", c_uint),
 		("LineCoords1", POINTER(c_double)),
 		("Values1", POINTER(c_float)),
+		("Mode", c_uint),
+		("M", c_float),
 		("LineCount2", c_uint),
 		("LineCoords2", POINTER(c_double)),
 		("Values2", POINTER(c_float)),
-		("BufferSize", c_float),
+		("BlurRadius", c_float),
 		("Resolution", c_float),
-		("CreateRangesPolygons", c_bool),
-		("CreateRangesRaster", c_bool),
-		("CreateGradientRaster", c_bool),
-		("OutCategoryCount", c_uint),
-		("OutPolygonCountPerCategory", POINTER(c_uint)),
-		("OutPolygonData", POINTER(c_uint)),
-		("OutPolygonCoords", POINTER(c_double)),
-		("OutRangesRaster", c_void_p),
-		("OutGradientRaster", c_void_p),
-		("m_ProgressCallback", PSTALGO_PROGRESS_CALLBACK),
-		("m_ProgressCallbackUser", c_void_p),
+		("OutRaster", c_void_p),
+		("OutMin", c_float),
+		("OutMax", c_float),
+		("ProgressCallback", PSTALGO_PROGRESS_CALLBACK),
+		("ProgressCallbackUser", c_void_p),
 	]
 	def __init__(self, *args):
 		Structure.__init__(self, *args)
-		self.Version = 1
+		self.Version = 4
 
 
-def PSTACreateBufferPolygons(psta, desc):
-	#print("\SCreateBufferPolygonsDesc:")
+def PSTACompareResults(psta, desc):
+	#print("\SCompareResultsDesc:")
 	#DumpStructure(desc)
-	fn = psta.PSTACreateBufferPolygons
-	fn.argtypes = [POINTER(SCreateBufferPolygonsDesc)]
+	fn = psta.PSTACompareResults
+	fn.argtypes = [POINTER(SCompareResultsDesc)]
 	fn.restype = c_void_p
 	return fn(byref(desc))
 
-
 """ The returned handle must be freed with call to Free(). """
-def CreateBufferPolygons(lineCoords1, values1, lineCoords2, values2, resolution, bufferSize, createRangesPolygons, createRangesRaster, createGradientRaster, progress_callback = None):
-	desc = SCreateBufferPolygonsDesc()
+def CompareResults(lineCoords1, values1, lineCoords2=None, values2=None, mode=0, M=0, resolution=0, blurRadius=1, progress_callback=None):
+	desc = SCompareResultsDesc()
 	(desc.Values1, valueCount1) = UnpackArray(values1, 'f')
 	(desc.Values2, valueCount2) = UnpackArray(values2, 'f')
 	(desc.LineCoords1, n) = UnpackArray(lineCoords1, 'd')
@@ -74,15 +75,58 @@ def CreateBufferPolygons(lineCoords1, values1, lineCoords2, values2, resolution,
 		(desc.LineCoords2, n) = UnpackArray(lineCoords2, 'd')
 		desc.LineCount2 = int(n / 4); assert(n % 4 == 0)
 		assert(valueCount2 == desc.LineCount2)
-	desc.BufferSize = bufferSize
-	desc.Resolution = resolution
-	desc.CreateRangesPolygons = createRangesPolygons
-	desc.CreateRangesRaster = createRangesRaster
-	desc.CreateGradientRaster = createGradientRaster
+	desc.Mode = mode
+	desc.M = M
+	desc.BlurRadius = blurRadius
+	desc.Resolution = resolution if resolution > 0 else blurRadius
 	desc.ProgressCallback = CreateCallbackWrapper(progress_callback)
 	desc.ProgressCallbackUser = c_void_p() 
-	handle = PSTACreateBufferPolygons(_DLL, desc)
+	handle = PSTACompareResults(_DLL, desc)
 	if 0 == handle:
-		raise Exception("CreateBufferPolygons failed.")
-	polygonCountPerCategory = [desc.OutPolygonCountPerCategory[i] for i in range(desc.OutCategoryCount)]
-	return (polygonCountPerCategory, desc.OutPolygonData, desc.OutPolygonCoords, desc.OutRangesRaster, desc.OutGradientRaster, handle)
+		raise Exception("CompareResults failed.")
+	return (desc.OutRaster, desc.OutMin, desc.OutMax, handle)
+
+
+class SRasterToPolygonsDesc(Structure) :
+	_fields_ = [
+		("Version", c_uint),
+		("Raster", c_void_p),
+		("RangeCount", c_uint),
+		("Ranges", POINTER(c_float)),
+		("OutPolygonCountPerRange", POINTER(c_uint)),
+		("OutPolygonData", POINTER(c_uint)),
+		("OutPolygonCoords", POINTER(c_double)),
+		("ProgressCallback", PSTALGO_PROGRESS_CALLBACK),
+		("ProgressCallbackUser", c_void_p),
+	]
+	def __init__(self, *args):
+		Structure.__init__(self, *args)
+		self.Version = 1
+
+
+def PSTARasterToPolygons(psta, desc):
+	#print("\SRasterToPolygonsDesc:")
+	#DumpStructure(desc)
+	fn = psta.PSTARasterToPolygons
+	fn.argtypes = [POINTER(SRasterToPolygonsDesc)]
+	fn.restype = c_void_p
+	return fn(byref(desc))
+
+""" The returned handle must be freed with call to Free(). """
+def RasterToPolygons(raster, ranges, progress_callback = None):
+	desc = SRasterToPolygonsDesc()
+	desc.Raster = raster
+	desc.RangeCount = len(ranges)
+	ranges_arr = []
+	for r in ranges:
+		ranges_arr.append(r[0])
+		ranges_arr.append(r[1])
+	ranges_arr = array.array('f', ranges_arr)
+	(desc.Ranges, _) = UnpackArray(ranges_arr, 'f')
+	desc.ProgressCallback = CreateCallbackWrapper(progress_callback)
+	desc.ProgressCallbackUser = c_void_p() 
+	handle = PSTARasterToPolygons(_DLL, desc)
+	if 0 == handle:
+		raise Exception("RasterToPolygons failed.")
+	polygonCountPerCategory = [desc.OutPolygonCountPerRange[i] for i in range(desc.RangeCount)]
+	return (polygonCountPerCategory, desc.OutPolygonData, desc.OutPolygonCoords, handle)

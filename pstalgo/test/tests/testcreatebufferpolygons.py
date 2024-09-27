@@ -33,20 +33,40 @@ class TestCreateBufferPolygons(unittest.TestCase):
             0, 2,
             2, 0,
         ])
-        (polygonCount, polygonData, polygonCoords, rangesRaster, gradientRaster, handle) = pstalgo.CreateBufferPolygons(lineCoords, 1, 1)
+        values1 = array.array('f', [
+            1,
+            2,
+        ])
+        values2 = array.array('f', [
+            3,
+            4,
+        ])
+        ranges = [
+            (0, 1),
+            (1, 2),
+        ]
+        (raster, handle1) = pstalgo.CompareResults(
+            lineCoords1=lineCoords, 
+            values1=values1, 
+            lineCoords2=None, 
+            values2=values2)
+        (polygonCountPerRange, polygonData, polygonCoords, handle2) = pstalgo.RasterToPolygons(raster, ranges)
         try:
-            pointCount = polygonData[1]
-            dataPos = 0
-            coordPos = 0
-            for polygonIndex in range(polygonCount):
-                print("Polygon #%d:" % polygonIndex)
-                ringCount = polygonData[dataPos]
-                dataPos += 1
-                for ringIndex in range(ringCount):
-                    pointCount = polygonData[dataPos]
-                    dataPos += 1
-                    coords = ["(%.2f %.2f)" % (polygonCoords[coordPos + pointIndex * 2], polygonCoords[coordPos + pointIndex * 2 + 1]) for pointIndex in range(pointCount)]
-                    coordPos += pointCount * 2
-                    print("\t" + ' '.join(coords))
+            pass
+            # dataPos = 0
+            # coordPos = 0
+            # for rangeIndex in range(len(ranges)):
+            #     print(f"Range #{rangeIndex}:")
+            #     for polygonIndex in range(polygonCountPerRange[rangeIndex]):
+            #         print(f"  Polygon #{polygonIndex}:")
+            #         ringCount = polygonData[dataPos]
+            #         dataPos += 1
+            #         for ringIndex in range(ringCount):
+            #             pointCount = polygonData[dataPos]
+            #             dataPos += 1
+            #             coords = ["(%.2f %.2f)" % (polygonCoords[coordPos + pointIndex * 2], polygonCoords[coordPos + pointIndex * 2 + 1]) for pointIndex in range(pointCount)]
+            #             coordPos += pointCount * 2
+            #             print(f"      Ring #{ringIndex}: " + ' '.join(coords))
         finally:
-            pstalgo.Free(handle)
+            pstalgo.Free(handle1)
+            pstalgo.Free(handle2)

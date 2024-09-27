@@ -273,6 +273,9 @@
     <ClInclude Include="..\include\pstalgo\utils\Span.h">
       <Filter>include\pstalgo\utils</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\pstalgo\analyses\RasterToPolygons.h">
+      <Filter>include\pstalgo\analyses</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\analyses\AngularChoice.cpp">
@@ -415,6 +418,9 @@
     </ClCompile>
     <ClCompile Include="..\src\gfx\Blur.cpp">
       <Filter>src\gfx</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\analyses\RasterToPolygons.cpp">
+      <Filter>src\analyses</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

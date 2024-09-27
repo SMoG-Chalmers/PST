@@ -25,37 +25,27 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 #include <pstalgo/Raster.h>
 #include "Common.h"
 
-struct SCompareResultsDesc 
+struct SRasterToPolygonsDesc 
 {
-	SCompareResultsDesc() : m_Version(VERSION) {}
+	SRasterToPolygonsDesc() : m_Version(VERSION) {}
 
 	// Version
-	static const unsigned int VERSION = 4;
+	static const unsigned int VERSION = 1;
 	unsigned int m_Version;
 
-	unsigned int LineCount1;
-	double* LineCoords1;
-	float* Values1;
+	psta_raster_handle_t Raster;
 
-	enum EMode : unsigned int
+	struct SRange
 	{
-		Normalized = 0,
-		RelativePercent = 1,
+		float Min;
+		float Max;
 	};
-	EMode Mode;
+	unsigned int RangeCount;
+	const SRange* Ranges;
 
-	float M;  // Only applicable when Mode == RelativePercent
-
-	unsigned int LineCount2;  // Optional, must be zero if not used
-	double* LineCoords2;      // Optional, must be NULL if not used
-	float* Values2;           // Number of values from LineCount2 if two line sets are used, otherwise LineCount1.
-
-	float BlurRadius;         // Radius for 1 std dev.
-	float Resolution;         // Pixel size in meters
-
-	psta_raster_handle_t OutRaster;
-	float                OutMin;
-	float                OutMax;
+	unsigned int* OutPolygonCountPerRange;
+	unsigned int* OutPolygonData;  // <ring count> <size of ring 1> ... <size of ring N>,  <ring count> <size of ring 1> ... <size of ring N> ...
+	double* OutPolygonCoords;
 
 	// Progress Callback
 	FPSTAProgressCallback m_ProgressCallback;
@@ -63,4 +53,4 @@ struct SCompareResultsDesc
 };
 
 //  NOTE: The returned handle must be freed with call to PSTAFree().
-PSTADllExport psta_handle_t PSTACompareResults(SCompareResultsDesc* desc);
+PSTADllExport psta_handle_t PSTARasterToPolygons(SRasterToPolygonsDesc* desc);

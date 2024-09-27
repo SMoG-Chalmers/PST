@@ -23,6 +23,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 #include <cstdint>
 #include <stdexcept>
+#include <type_traits>
 #include <pstalgo/pstalgo.h>
 #include <pstalgo/geometry/Rect.h>
 #include <pstalgo/geometry/Rect.h>
@@ -43,6 +44,9 @@ namespace psta
 	template <typename T>
 	inline Arr2dView<T> Arr2dViewFromRaster(CRaster& raster);
 
+	template <typename T>
+	inline Arr2dView<const T> Arr2dViewFromRaster(const CRaster& raster);
+
 	class CRaster : public IPSTAlgo
 	{
 	public:
@@ -50,8 +54,11 @@ namespace psta
 		CRaster(uint32_t width, uint32_t height, RasterFormat format);
 		~CRaster();
 
-		template <typename T> 
+		template <typename T>
 		inline operator Arr2dView<T>() { return Arr2dViewFromRaster<T>(*this); }
+
+		template <typename T>
+		inline operator Arr2dView<const T>() const { return Arr2dViewFromRaster<const T>(const_cast<CRaster&>(*this)); }
 
 		void SetBB(const CRectd& bb) { m_BB = bb; }
 		const CRectd& BB() const { return m_BB; }
@@ -60,6 +67,9 @@ namespace psta
 		inline uint32_t Pitch() const { return m_Pitch; }
 		inline RasterFormat Format() const { return m_Format; }
 		inline void* Data() { return m_Bits; }
+		inline const void* Data() const { return m_Bits; }
+
+		double2 PixelSize() const { return double2(m_BB.Width() / m_Width, m_BB.Height() / m_Height); }
 
 	private:
 		uint32_t m_Width = 0;
@@ -73,11 +83,11 @@ namespace psta
 	template <typename T> inline RasterFormat RasterFormatForType() { throw std::runtime_error("Unsupported raster data type"); }
 	template <> inline RasterFormat RasterFormatForType<uint8_t>()  { return RasterFormat_Byte; }
 	template <> inline RasterFormat RasterFormatForType<float>()    { return RasterFormat_Float; }
-	
+
 	template <typename T>
 	inline Arr2dView<T> Arr2dViewFromRaster(CRaster& raster)
 	{
-		if (RasterFormatForType<T>() != raster.Format())
+		if (RasterFormatForType<std::remove_const_t<T>>() != raster.Format())
 		{
 			throw std::runtime_error("Raster data type mismatch");
 		}

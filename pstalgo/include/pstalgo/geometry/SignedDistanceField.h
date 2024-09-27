@@ -35,7 +35,7 @@ namespace psta
 		std::vector<ring_t> Rings;
 	};
 	
-	std::vector<SPolygon> PolygonsFromSdfGrid(const Arr2dView<float>& sdf, float range_min, float range_max = std::numeric_limits<float>::max());
+	std::vector<SPolygon> PolygonsFromSdfGrid(const Arr2dView<const float>& sdf, float range_min, float range_max = std::numeric_limits<float>::max());
 
 	void AddLineSegmentToSdf(Arr2dView<float>& sdf, const float2& p0, const float2& p1, float maxDistance);
 

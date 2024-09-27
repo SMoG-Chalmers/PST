@@ -270,7 +270,7 @@ namespace psta
 	}
 	*/
 
-	static std::vector<float2> TrailRing(const Arr2dView<float>& sdf, float range_min, float range_max, const uint2& startPos, EDirection startDirection, Arr2dView<uint8_t>& directionBits)
+	static std::vector<float2> TrailRing(const Arr2dView<const float>& sdf, float range_min, float range_max, const uint2& startPos, EDirection startDirection, Arr2dView<uint8_t>& directionBits)
 	{
 		const float MIN_RES = 0.05f;
 		const float MIN_RES_SQRD = MIN_RES * MIN_RES;
@@ -396,7 +396,7 @@ namespace psta
 		return pts;
 	}
 
-	std::vector<SPolygon> PolygonsFromSdfGrid(const Arr2dView<float>& sdf, float range_min, float range_max)
+	std::vector<SPolygon> PolygonsFromSdfGrid(const Arr2dView<const float>& sdf, float range_min, float range_max)
 	{
 		const uint2 FLOOD_FILL_STEPS[] =
 		{

@@ -37,94 +37,11 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 namespace psta
 {
-	class CBufferingPolygons : public IPSTAlgo
+	class CCompareResults : public IPSTAlgo
 	{
 	public:
-		std::vector<uint32_t> PolygonCountPerCategory;
-		std::vector<uint32_t> PolygonData;
-		std::vector<double2> Coordinates;
-		std::unique_ptr<CRaster> RangesRaster;
-		std::unique_ptr<CRaster> GradientRaster;
+		std::unique_ptr<CRaster> Raster;
 	};
-
-	/*
-	template <class T>
-	struct LineSegment
-	{
-		TVec2<T> p0;
-		TVec2<T> p1;
-	};
-
-	template <class T>
-	struct LineSegmentWithValues
-	{
-		TVec2<T> p0;
-		TVec2<T> p1;
-		float value0;
-		float value1;
-	};
-
-	void MergeLineSets(
-		const LineSegment<double>* lines0, 
-		const float* values0, 
-		uint32_t lineCount0, 
-		const LineSegment<double>* lines1, 
-		const float* values1, 
-		uint32_t lineCount1,
-		float padding,
-		CRectd& out_bb,
-		std::vector<LineSegmentWithValues<float>>& out_lines)
-	{
-		out_bb = CRectd::Union(
-			CRectd::BBFromPoints((const double2*)lines0, lineCount0 * 2),
-			CRectd::BBFromPoints((const double2*)lines1, lineCount1 * 2)).Inflated(padding);;
-
-		const auto origin = out_bb.m_Min;
-
-		out_lines.clear();
-		out_lines.reserve(lineCount0 + lineCount1);
-		for (uint32_t i = 0; i < lineCount0; ++i)
-		{
-			LineSegmentWithValues<float> l;
-			l.p0 = float2(lines0[i].p0 - origin);
-			l.p1 = float2(lines0[i].p1 - origin);
-			l.value0 = values0[i];
-			l.value1 = std::numeric_limits<float>::quiet_NaN();
-			out_lines.push_back(l);
-		}
-		for (uint32_t i = 0; i < lineCount1; ++i)
-		{
-			LineSegmentWithValues<float> l;
-			l.p0 = float2(lines1[i].p0 - origin);
-			l.p1 = float2(lines1[i].p1 - origin);
-			l.value0 = std::numeric_limits<float>::quiet_NaN();
-			l.value1 = values1[i];
-			out_lines.push_back(l);
-		}
-
-		std::sort(out_lines.begin(), out_lines.end(), [](const auto& a, const auto& b) -> bool
-		{
-			const auto cmp = memcmp(&a, &b, 4 * sizeof(float));
-			return (0 == cmp) ? (int)isnan(a.value0) < (int)isnan(b.value0) : cmp < 0;
-		});
-
-		{
-			size_t n = std::min(out_lines.size(), (size_t)1);
-			for (size_t i = 1; i < out_lines.size(); ++i)
-			{
-				if (memcmp(&out_lines[n - 1].p0, &out_lines[i].p0, 4 * sizeof(float)) == 0)
-				{
-					out_lines[n - 1].value1 = out_lines[i].value1;
-				}
-				else
-				{
-					out_lines[n++] = out_lines[i];
-				}
-			}
-			out_lines.resize(n);
-		}
-	}
-	*/
 
 	static void RasterLine(Arr2dView<float>& img, const float2& p0, const float2& p1, float intensity)
 	{
@@ -274,7 +191,7 @@ namespace psta
 		});
 	}
 
-	std::unique_ptr<CBufferingPolygons> CreateBufferingPolygons(SCreateBufferPolygonsDesc& desc, IProgressCallback& progress)
+	std::unique_ptr<CCompareResults> CompareResults(SCompareResultsDesc& desc, IProgressCallback& progress)
 	{
 		const std::pair<float, float> RANGES[] = {
 			{std::numeric_limits<float>::lowest(), -0.50f},
@@ -299,7 +216,7 @@ namespace psta
 			const auto bb2 = CRectd::BBFromPoints((const double2*)desc.LineCoords2, desc.LineCount2 * 2);
 			bb.GrowToIncludeRect(bb2);
 		}
-		bb.Inflate(desc.BufferSize * SIGMA_RANGE);
+		bb.Inflate(desc.BlurRadius * SIGMA_RANGE);
 		bb.m_Min.x = floor(bb.m_Min.x * invPixelSizeMeters) * pixelSizeMeters;
 		bb.m_Min.y = floor(bb.m_Min.y * invPixelSizeMeters) * pixelSizeMeters;
 		bb.m_Max.x = ceil(bb.m_Max.x  * invPixelSizeMeters) * pixelSizeMeters;
@@ -318,197 +235,128 @@ namespace psta
 
 		typedef std::pair<double2, double2> line_t;
 
-		const bool use_decay = true;
-		if (use_decay)
+		if (SCompareResultsDesc::Normalized == desc.Mode)
 		{
-			auto raster_lines = [&](const line_t* lines, const float* intensities, size_t count, float multiplier)
 			{
-				for (size_t line_index = 0; line_index < count; ++line_index)
+				auto raster_lines = [&](const line_t* lines, const float* intensities, size_t count, float multiplier)
 				{
-					float2 p0(lines[line_index].first - pixel_origin);
-					float2 p1(lines[line_index].second - pixel_origin);
-					RasterLine(sdf_view, p0 * invPixelSizeMeters, p1 * invPixelSizeMeters, intensities[line_index] * multiplier);
-				}
-			};
-
-			raster_lines((line_t*)desc.LineCoords1, desc.Values1, desc.LineCount1, -1.f);
-			if (desc.LineCoords2)
-			{
-				raster_lines((line_t*)desc.LineCoords2, desc.Values2, desc.LineCount2, 1.f);
-			}
-			else
-			{
-				raster_lines((line_t*)desc.LineCoords1, desc.Values2, desc.LineCount1, 1.f);
-			}
-
-			GaussianBlur(sdf_view, desc.BufferSize * invPixelSizeMeters);
-		}
-		else
-		{
-			std::vector<std::pair<float2, float2>> lines;
-			lines.reserve(std::max(desc.LineCount1, desc.LineCount2));
-
-			const auto radiusInPixels = invPixelSizeMeters * desc.BufferSize;
-
-			auto raster_pills = [&](Arr2dView<float> raster_view, const array_view<line_t> dlines, const array_view<float> intensities)
-			{
-				lines.resize(dlines.size());
-				for (size_t line_index = 0; line_index < dlines.size(); ++line_index)
-				{
-					lines[line_index].first = float2(dlines[line_index].first - pixel_origin) * invPixelSizeMeters;
-					lines[line_index].second = float2(dlines[line_index].second - pixel_origin) * invPixelSizeMeters;
-				}
-				RasterCapsules(raster_view, make_array_view(lines.data(), lines.size()), radiusInPixels, intensities);
-			};
-
-			// Before
-			CRaster raster_before(sdf_raster->Width(), sdf_raster->Height(), sdf_raster->Format());
-			auto raster_before_view = (Arr2dView<float>)raster_before;
-			raster_before_view.Clear(0);
-			raster_pills(raster_before_view, make_array_view((line_t*)desc.LineCoords1, desc.LineCount1), make_array_view(desc.Values1, desc.LineCount1));
-			
-			// After
-			if (desc.LineCoords2)
-			{
-				raster_pills(sdf_view, make_array_view((line_t*)desc.LineCoords2, desc.LineCount2), make_array_view(desc.Values2, desc.LineCount2));
-			}
-			else
-			{
-				raster_pills(sdf_view, make_array_view((line_t*)desc.LineCoords1, desc.LineCount1), make_array_view(desc.Values2, desc.LineCount1));
-			}
-
-			// After - Before
-			sdf_view.for_each_coords([&](uint32_t x, uint32_t y, float& pixel)
-			{
-				pixel -= raster_before_view.at(x, y);
-			});
-
-
-			// Before Only
-			//raster_pills(sdf_view, make_array_view((line_t*)desc.LineCoords1, desc.LineCount1), make_array_view(desc.Values1, desc.LineCount1));
-
-			// After only
-			//raster_pills(sdf_view, make_array_view((line_t*)desc.LineCoords2, desc.LineCount2), make_array_view(desc.Values2, desc.LineCount2));
-		}
-
-		// Normalize value range [-1..1]
-		{
-			float min = std::numeric_limits<float>::max(), max = std::numeric_limits<float>::lowest();
-			sdf_view.for_each([&](auto& value)
-			{
-				min = std::min(min, value);
-				max = std::max(max, value);
-			});
-			const auto max_range = std::max(abs(min), abs(max));
-			const auto inv_max_range = 1.f / max_range;
-			sdf_view.for_each([&](auto& value)
-			{
-				value *= inv_max_range;
-			});
-		}
-
-		auto result = std::make_unique<CBufferingPolygons>();
-		result->PolygonData.reserve(1024);
-		result->Coordinates.reserve(1024);
-
-		if (desc.CreateRangesPolygons)
-		{
-			for (size_t range_index = 0; range_index < sizeof(RANGES) / sizeof(RANGES[0]); ++range_index)
-			{
-				const auto& range = RANGES[range_index];
-				const auto polygons = PolygonsFromSdfGrid(sdf_view, range.first, range.second);
-
-				// Calculate and reserve space
-				size_t polygonDataSize = 0;
-				size_t polygonPointCount = 0;
-				for (const auto& polygon : polygons)
-				{
-					polygonDataSize += 1 + polygon.Rings.size();
-					for (const auto& ring : polygon.Rings)
+					for (size_t line_index = 0; line_index < count; ++line_index)
 					{
-						polygonPointCount += ring.size();
+						float2 p0(lines[line_index].first - pixel_origin);
+						float2 p1(lines[line_index].second - pixel_origin);
+						RasterLine(sdf_view, p0 * invPixelSizeMeters, p1 * invPixelSizeMeters, intensities[line_index] * multiplier);
 					}
-				}
-				result->PolygonData.reserve(result->PolygonData.size() + polygonDataSize);
-				result->Coordinates.reserve(result->Coordinates.size() + polygonPointCount);
+				};
 
-				for (const auto& polygon : polygons)
+				raster_lines((line_t*)desc.LineCoords1, desc.Values1, desc.LineCount1, -1.f);
+				if (desc.LineCoords2)
 				{
-					result->PolygonData.push_back((uint32_t)polygon.Rings.size());
-					for (const auto& ring : polygon.Rings)
-					{
-						result->PolygonData.push_back((uint32_t)ring.size());
-						for (const auto& pt : ring)
-						{
-							result->Coordinates.push_back(pixel_origin + (double2(pt) * desc.Resolution));
-						}
-					}
+					raster_lines((line_t*)desc.LineCoords2, desc.Values2, desc.LineCount2, 1.f);
+				}
+				else
+				{
+					raster_lines((line_t*)desc.LineCoords1, desc.Values2, desc.LineCount1, 1.f);
 				}
 
-				result->PolygonCountPerCategory.push_back((uint32_t)polygons.size());
+				GaussianBlur(sdf_view, desc.BlurRadius * invPixelSizeMeters);
+			}
+
+			// Normalize value range [-1..1]
+			{
+				float min = std::numeric_limits<float>::max(), max = std::numeric_limits<float>::lowest();
+				sdf_view.for_each([&](auto& value)
+				{
+					min = std::min(min, value);
+					max = std::max(max, value);
+				});
+				desc.OutMin = min;
+				desc.OutMax = max;
+				const auto max_range = std::max(abs(min), abs(max));
+				const auto inv_max_range = 1.f / max_range;
+				sdf_view.for_each([&](auto& value)
+				{
+					value *= inv_max_range;
+				});
 			}
 		}
-
-		if (desc.CreateRangesRaster || desc.CreateGradientRaster)
+		else if (SCompareResultsDesc::RelativePercent == desc.Mode)
 		{
-			sdf_view.FlipY();
-		}
-
-		if (desc.CreateRangesRaster)
-		{
-			auto ranges_raster = std::make_unique<CRaster>(
-				sdf_raster->Width(),
-				sdf_raster->Height(),
-				RasterFormat_Byte);
-			ranges_raster->SetBB(sdf_raster->BB());
-
-			auto ranges_raster_view = (Arr2dView<uint8_t>)*ranges_raster;
-			ranges_raster_view.Clear(0);
-
-			for (uint32_t y = 0; y < sdf_view.Height(); ++y)
 			{
-				for (uint32_t x = 0; x < sdf_view.Width(); ++x)
+				CRaster before_raster(sdf_raster->Width(), sdf_raster->Height(), RasterFormat_Float);
+				before_raster.SetBB(sdf_raster->BB());
+				auto before_view = (Arr2dView<float>)before_raster;
+				before_view.Clear(0);
+
+				auto raster_lines = [&](const line_t* lines, const float* intensities, size_t count, float multiplier, Arr2dView<float>& raster_view)
 				{
-					const auto value = sdf_view.at(x, y);
-					for (size_t range_index = 0; range_index < sizeof(RANGES) / sizeof(RANGES[0]); ++range_index)
+					for (size_t line_index = 0; line_index < count; ++line_index)
 					{
-						const auto& range = RANGES[range_index];
-						if (value >= range.first && value <= range.second)
-						{
-							ranges_raster_view.at(x, y) = (uint8_t)range_index + 1;
-							break;
-						}
+						float2 p0(lines[line_index].first - pixel_origin);
+						float2 p1(lines[line_index].second - pixel_origin);
+						RasterLine(raster_view, p0 * invPixelSizeMeters, p1 * invPixelSizeMeters, intensities[line_index] * multiplier);
+					}
+				};
+
+				// Before
+				raster_lines((line_t*)desc.LineCoords1, desc.Values1, desc.LineCount1, 1.f, before_view);
+				GaussianBlur(before_view, desc.BlurRadius * invPixelSizeMeters);
+
+				// After
+				if (desc.LineCoords2)
+				{
+					raster_lines((line_t*)desc.LineCoords2, desc.Values2, desc.LineCount2, 1.f, sdf_view);
+				}
+				else
+				{
+					raster_lines((line_t*)desc.LineCoords1, desc.Values2, desc.LineCount1, 1.f, sdf_view);
+				}
+				GaussianBlur(sdf_view, desc.BlurRadius * invPixelSizeMeters);
+
+				// Calculate difference
+				for (uint32_t y = 0; y < sdf_view.Height(); ++y)
+				{
+					auto* before = &before_view.at(0, y);
+					auto* after  = &sdf_view.at(0, y);
+					for (uint32_t x = 0; x < sdf_view.Width(); ++x)
+					{
+						after[x] = 100.f * (std::max(after[x], desc.M) / std::max(before[x], desc.M) - 1.f);
 					}
 				}
 			}
 
-			result->RangesRaster = std::move(ranges_raster);
+			// Calculate min and max
+			{
+				float min = std::numeric_limits<float>::max(), max = std::numeric_limits<float>::lowest();
+				sdf_view.for_each([&](auto& value)
+					{
+						min = std::min(min, value);
+						max = std::max(max, value);
+					});
+				desc.OutMin = min;
+				desc.OutMax = max;
+			}
 		}
 
-		if (desc.CreateGradientRaster)
-		{
-			result->GradientRaster = std::move(sdf_raster);
-		}
+		sdf_view.FlipY();
 
-		desc.OutCategoryCount = (uint32_t)result->PolygonCountPerCategory.size();
-		desc.OutPolygonCountPerCategory = result->PolygonCountPerCategory.empty() ? nullptr : result->PolygonCountPerCategory.data();
-		desc.OutPolygonData = result->PolygonData.empty() ? nullptr : result->PolygonData.data();
-		desc.OutPolygonCoords = result->Coordinates.empty() ? nullptr : (double*)result->Coordinates.data();
-		desc.OutRangesRaster = result->RangesRaster.get();
-		desc.OutGradientRaster = result->GradientRaster.get();
+		auto result = std::make_unique<CCompareResults>();
+
+		result->Raster = std::move(sdf_raster);
+
+		desc.OutRaster = result->Raster.get();
 
 		return result;
 	}
 }
 
-PSTADllExport psta_handle_t PSTACreateBufferPolygons(SCreateBufferPolygonsDesc* desc)
+PSTADllExport psta_handle_t PSTACompareResults(SCompareResultsDesc* desc)
 {
 	try {
 		VerifyStructVersion(*desc);
 
 		CPSTAlgoProgressCallback progress(desc->m_ProgressCallback, desc->m_ProgressCallbackUser);
 
-		return psta::CreateBufferingPolygons(*desc, progress).release();
+		return psta::CompareResults(*desc, progress).release();
 	}
 	catch (const std::exception& e) {
 		LOG_ERROR(e.what());
