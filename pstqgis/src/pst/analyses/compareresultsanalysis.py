@@ -32,8 +32,8 @@ from ..model import GeometryType
 
 COLORS = ['#5149f6cc', '#69b7f7cc', '#d0f1e2cc', '#f8feeacc', '#f9f8d6cc', '#f2e262cc', '#f1b152cc', '#e04d4dcc']
 RANGES = [0.01, 0.10, 0.25, 0.5, 1.0]
-RANGE_TEXTS = ["%.2f - %.2f" % (RANGES[-i-2], RANGES[-i-1]) for i in range(len(RANGES) - 1)]
-RANGE_TEXTS += ["%.2f - %.2f" % (RANGES[i], RANGES[i+1]) for i in range(len(RANGES) - 1)]
+RANGE_TEXTS = ["%.2f - %.2f (-)" % (RANGES[-i-2], RANGES[-i-1]) for i in range(len(RANGES) - 1)]
+RANGE_TEXTS += ["%.2f - %.2f (+)" % (RANGES[i], RANGES[i+1]) for i in range(len(RANGES) - 1)]
 
 
 def SetGradientRasterShader(layer, valueRange):
@@ -97,7 +97,7 @@ class CompareResultsAnalysis(BaseAnalysis):
 		model = self._model
 
 		separateTables = props['in_table1'] != props['in_table2']
-		compareMode = pstalgo.CompareResultsMode.NORMALIZED if props['calc_normalized'] else pstalgo.CompareResultsMode.RELATIVE_PERCENT
+		compareMode = pstalgo.CompareResultsMode.NORMALIZED  # pstalgo.CompareResultsMode.NORMALIZED if props['calc_normalized'] else pstalgo.CompareResultsMode.RELATIVE_PERCENT
 
 		# Tasks
 		progress = MultiTaskProgressDelegate(delegate)
@@ -156,16 +156,15 @@ class CompareResultsAnalysis(BaseAnalysis):
 				lineCoords2 = line_arrays[1], 
 				values2 = value_arrays[1],
 				mode = compareMode,
-				M = props['M'],
+				# M = props['M'],
 				resolution = pixelSize, 
 				blurRadius = radius, 
 				progress_callback = pstalgo.CreateAnalysisDelegateCallbackWrapper(progress))
 
 			if createRangesPolygons:
 
-				ranges = [
-					(10, 100000),
-				]
+				ranges = [(-RANGES[-i-1], -RANGES[-i-2]) for i in range(len(RANGES) - 1)]
+				ranges += [(RANGES[i], RANGES[i+1]) for i in range(len(RANGES) - 1)]
 
 				progress.setCurrentTask(Tasks.POLYGONS)
 				(polygonCountPerRange, polygonData, polygonCoords, result2) = pstalgo.RasterToPolygons(
