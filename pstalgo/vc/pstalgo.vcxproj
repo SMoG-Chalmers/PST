@@ -31,6 +31,7 @@
     <ClInclude Include="..\include\pstalgo\analyses\CreateSegmentMap.h" />
     <ClInclude Include="..\include\pstalgo\analyses\NetworkIntegration.h" />
     <ClInclude Include="..\include\pstalgo\analyses\ODBetweenness.h" />
+    <ClInclude Include="..\include\pstalgo\analyses\RasterToPolygons.h" />
     <ClInclude Include="..\include\pstalgo\analyses\Reach.h" />
     <ClInclude Include="..\include\pstalgo\analyses\SegmentBetweenness.h" />
     <ClInclude Include="..\include\pstalgo\analyses\SegmentGrouping.h" />
@@ -103,6 +104,7 @@
     <ClCompile Include="..\src\analyses\CreateSegmentMap.cpp" />
     <ClCompile Include="..\src\analyses\NetworkIntegration.cpp" />
     <ClCompile Include="..\src\analyses\ODBetweenness.cpp" />
+    <ClCompile Include="..\src\analyses\RasterToPolygons.cpp" />
     <ClCompile Include="..\src\analyses\Reach.cpp" />
     <ClCompile Include="..\src\analyses\SegmentBetweenness.cpp" />
     <ClCompile Include="..\src\analyses\SegmentGrouping.cpp" />
@@ -143,18 +145,18 @@
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>MyRootNameSpace</RootNamespace>
     <LatestTargetPlatformVersion>$([Microsoft.Build.Utilities.ToolLocationHelper]::GetLatestSDKTargetPlatformVersion('Windows', '10.0'))</LatestTargetPlatformVersion>
-    <WindowsTargetPlatformVersion>$(LatestTargetPlatformVersion)</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <CharacterSet>MultiByte</CharacterSet>
     <UseOfMfc>false</UseOfMfc>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <WholeProgramOptimization>true</WholeProgramOptimization>
@@ -162,14 +164,14 @@
     <UseOfMfc>false</UseOfMfc>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <CharacterSet>MultiByte</CharacterSet>
     <UseOfMfc>false</UseOfMfc>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <WholeProgramOptimization>true</WholeProgramOptimization>
