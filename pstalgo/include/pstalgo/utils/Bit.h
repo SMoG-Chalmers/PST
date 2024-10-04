@@ -48,6 +48,8 @@ namespace psta
 		#endif
 	}
 
+	inline unsigned int bit_scan_reverse(uint32_t val) { return bit_scan_reverse_32(val); }
+
 	// Returns zero-based index of most significant bit set in 'val' (i.e. val = 0x1000 --> 12)
 	#ifdef PSTA_64
 		inline unsigned int bit_scan_reverse_64(unsigned long long val)
@@ -60,10 +62,10 @@ namespace psta
 				return sizeof(val) * 8 - 1 - __builtin_clzll(val);
 			#endif
 		}
+
+		inline unsigned int bit_scan_reverse(uint64_t val) { return bit_scan_reverse_64(val); }
 	#endif
 
-	inline unsigned int bit_scan_reverse(uint32_t val) { return bit_scan_reverse_32(val); }
-	inline unsigned int bit_scan_reverse(uint64_t val) { return bit_scan_reverse_64(val); }
 
 	template <typename T> T align_up(T val, T alignment)
 	{
