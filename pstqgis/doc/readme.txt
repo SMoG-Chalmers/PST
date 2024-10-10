@@ -30,7 +30,7 @@ Installation:
        where {USERNAME} is your user name (without {}-characters).
    
      Mac:
-       ~/Library/Application\ Support/QGIS/QGIS3/profiles/default/python/plugins
+       ~/Library/Application Support/QGIS/QGIS3/profiles/default/python/plugins
 
    If done correctly you should end up with a folder called "pst" inside
    the "plugins" folder.
