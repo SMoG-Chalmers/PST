@@ -5,6 +5,9 @@ set(CMAKE_BUILD_TYPE Release)
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/../bin)
 
+# Mac: Set architectures to build for both x86_64 and arm64
+set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")
+
 # We need C++11
 include(CheckCXXCompilerFlag)
 CHECK_CXX_COMPILER_FLAG("-std=c++14" COMPILER_SUPPORTS_CXX14)
@@ -31,6 +34,3 @@ add_library(pstalgo SHARED ${SOURCES})
 
 # Set the location for library installation -- i.e., /usr/lib in this case
 # install(TARGETS testStudent DESTINATION /usr/lib)
-
-# Mac: Set architectures to build for both x86_64 and arm64
-set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")
