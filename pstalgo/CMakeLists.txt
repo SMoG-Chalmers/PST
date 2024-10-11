@@ -31,3 +31,6 @@ add_library(pstalgo SHARED ${SOURCES})
 
 # Set the location for library installation -- i.e., /usr/lib in this case
 # install(TARGETS testStudent DESTINATION /usr/lib)
+
+# Mac: Set architectures to build for both x86_64 and arm64
+set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")
