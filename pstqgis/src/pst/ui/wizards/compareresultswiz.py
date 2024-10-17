@@ -20,12 +20,12 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 """
 
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtGui import QIntValidator
+from qgis.PyQt.QtGui import QIntValidator, QFontMetrics
 from qgis.PyQt.QtWidgets import QComboBox, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QCheckBox, QRadioButton, QButtonGroup
 from qgis.core import QgsProject, QgsVectorLayer, QgsWkbTypes
 from ..wizard import BaseWiz, BasePage, WizProp, WizPropFloat
 from ..pages import ReadyPage, ProgressPage, FinishPage
-
+from ..widgets import WidgetEnableRadioButton
 
 class CompareResultsWiz(BaseWiz):
 	def __init__(self, parent, settings, model, task_factory):
@@ -54,6 +54,7 @@ class InputPage(BasePage):
 
 	def createWidgets(self):
 		SEPARATOR_HEIGHT = 20
+		INDENT_WIDTH = 20
 
 		vlayout = QVBoxLayout()
 	
@@ -113,22 +114,46 @@ class InputPage(BasePage):
 		# hlayout.addStretch()
 		# vlayout.addLayout(hlayout)
 
-		vlayout.addSpacing(SEPARATOR_HEIGHT)
+		# vlayout.addSpacing(SEPARATOR_HEIGHT)
 
 		hlayout = QHBoxLayout()
-		hlayout.addWidget(QLabel("Blur radius (std dev):"))
+		hlayout.addWidget(QLabel("Pixel size:"))
 		edit = QLineEdit()
 		edit.setAlignment(Qt.AlignRight)
 		edit.setValidator(QIntValidator(0, 999999, self))
-		self.regProp("radius", WizProp(edit, "50"))
+		edit.setFixedWidth(QFontMetrics(edit.font()).horizontalAdvance('0' * 7))
+		self.regProp("pixel_size", WizProp(edit, "10"))
 		hlayout.addWidget(edit)
-		hlayout.setStretch(1, 0)
 		hlayout.addWidget(QLabel("meters"))
 		hlayout.addStretch()
-		hlayout.setStretch(3, 10)
+		vlayout.addLayout(hlayout)
+		
+		vlayout.addSpacing(SEPARATOR_HEIGHT)
+
+		vlayout.addWidget(QLabel("Blurring extent"))
+
+		hlayout = QHBoxLayout()
+		hlayout.addSpacing(INDENT_WIDTH)
+		radio1 = QRadioButton("Automatic (pixel size * 7)")
+		radio1.setChecked(True)
+		hlayout.addWidget(radio1)
 		vlayout.addLayout(hlayout)
 
-		vlayout.addSpacing(SEPARATOR_HEIGHT)
+		hlayout = QHBoxLayout()
+		hlayout.addSpacing(INDENT_WIDTH)
+		edit = QLineEdit()
+		edit.setAlignment(Qt.AlignRight)
+		edit.setValidator(QIntValidator(0, 999999, self))
+		edit.setFixedWidth(QFontMetrics(edit.font()).horizontalAdvance('0' * 7))
+		self.regProp("blur_extent", WizProp(edit, "50"))
+		label = QLabel("meters")
+		radio2 = WidgetEnableRadioButton("Custom:", [edit, label])
+		self.regProp("custom_blur_extent", WizProp(radio2, False))
+		hlayout.addWidget(radio2)
+		hlayout.addWidget(edit)
+		hlayout.addWidget(label)
+		hlayout.addStretch()
+		vlayout.addLayout(hlayout)
 
 		vlayout.addStretch()
 
@@ -169,7 +194,7 @@ class OutputPage(BasePage):
 			("Gradient raster layer", "gradient_raster"),
 		]
 		for title,var_name in check_boxes:
-			checkBox = QRadioButton(title)
+			checkBox = QCheckBox(title)
 			self.regProp(var_name, WizProp(checkBox, True))
 			vlayout.addWidget(checkBox)
 

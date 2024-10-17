@@ -142,8 +142,8 @@ class CompareResultsAnalysis(BaseAnalysis):
 				self._model.readValues(table_name, column_name, rowids, values)
 				value_arrays.append(values)
 
-			radius = max(1, int(props['radius']))
-			pixelSize = max(1, round(math.sqrt(radius)))
+			pixelSize = max(1, int(props['pixel_size']))
+			blurRadius = max(1, int(props['blur_extent'])) if props['custom_blur_extent'] else pixelSize * 7
 
 			createRangesPolygons = props['ranges_polygons'] 
 			createGradientRaster = props['gradient_raster']
@@ -158,7 +158,7 @@ class CompareResultsAnalysis(BaseAnalysis):
 				mode = compareMode,
 				# M = props['M'],
 				resolution = pixelSize, 
-				blurRadius = radius, 
+				blurRadius = blurRadius, 
 				progress_callback = pstalgo.CreateAnalysisDelegateCallbackWrapper(progress))
 
 			if createRangesPolygons:
