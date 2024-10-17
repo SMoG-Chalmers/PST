@@ -243,9 +243,6 @@
     <ClInclude Include="..\include\pstalgo\geometry\Plane2D.h">
       <Filter>include\pstalgo\geometry</Filter>
     </ClInclude>
-    <ClInclude Include="..\include\pstalgo\analyses\VisualConnectivity.h">
-      <Filter>include\pstalgo\analyses</Filter>
-    </ClInclude>
     <ClInclude Include="..\include\pstalgo\Raster.h">
       <Filter>include\pstalgo</Filter>
     </ClInclude>
@@ -399,9 +396,6 @@
       <Filter>src\geometry</Filter>
     </ClCompile>
     <ClCompile Include="..\src\analyses\CalculateIsovists.cpp">
-      <Filter>src\analyses</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\analyses\VisualConnectivity.cpp">
       <Filter>src\analyses</Filter>
     </ClCompile>
     <ClCompile Include="..\src\Raster.cpp">

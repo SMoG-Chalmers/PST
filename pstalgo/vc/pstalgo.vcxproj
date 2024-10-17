@@ -36,7 +36,6 @@
     <ClInclude Include="..\include\pstalgo\analyses\SegmentBetweenness.h" />
     <ClInclude Include="..\include\pstalgo\analyses\SegmentGrouping.h" />
     <ClInclude Include="..\include\pstalgo\analyses\SegmentGroupIntegration.h" />
-    <ClInclude Include="..\include\pstalgo\analyses\VisualConnectivity.h" />
     <ClInclude Include="..\include\pstalgo\BFS.h" />
     <ClInclude Include="..\include\pstalgo\Debug.h" />
     <ClInclude Include="..\include\pstalgo\experimental\ArrayView.h" />
@@ -109,7 +108,6 @@
     <ClCompile Include="..\src\analyses\SegmentBetweenness.cpp" />
     <ClCompile Include="..\src\analyses\SegmentGrouping.cpp" />
     <ClCompile Include="..\src\analyses\SegmentGroupIntegration.cpp" />
-    <ClCompile Include="..\src\analyses\VisualConnectivity.cpp" />
     <ClCompile Include="..\src\BFS.cpp" />
     <ClCompile Include="..\src\Debug.cpp" />
     <ClCompile Include="..\src\experimental\DirectedMultiDistanceGraph.cpp" />
