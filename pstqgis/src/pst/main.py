@@ -105,7 +105,7 @@ class PSTPlugin(object):
 
 	def createActions(self):
 		ACTIONS = [
-			('Split Polylines',        lambda : self.onAnalysis(wizards.SplitPolylinesWiz,        analyses.SplitPolylinesAnalysis), None),
+			#('Split Polylines',        lambda : self.onAnalysis(wizards.SplitPolylinesWiz,        analyses.SplitPolylinesAnalysis), None),
 			('Create Segment Map',     lambda : self.onAnalysis(wizards.CreateSegmentMapWiz,      analyses.CreateSegmentMapAnalysis), None),
 			('Create Junctions',       lambda : self.onAnalysis(wizards.CreateJunctionsWiz,       analyses.CreateJunctionsAnalysis), None),
 			('Compare Results',        lambda : self.onAnalysis(wizards.CompareResultsWiz,        analyses.CompareResultsAnalysis), None),
