@@ -23,14 +23,31 @@ from qgis.PyQt.QtWidgets import QComboBox, QGridLayout, QLabel
 from ..wizard import BasePage, WizProp, WizPropFloat
 from ..widgets import WidgetEnableCheckBox
 
+
+class NetworkTypeFlags(object):
+	AXIAL = 1
+	SEGMENT = 2
+	AXIAL_AND_SEGMENT = 3
+
+
+def NetworkTypeTextFromFlags(networkTypeFlags):
+	if networkTypeFlags == NetworkTypeFlags.AXIAL:
+		return "Axial"
+	if networkTypeFlags == NetworkTypeFlags.SEGMENT:
+		return "Segment"
+	if networkTypeFlags == NetworkTypeFlags.AXIAL_AND_SEGMENT:
+		return "Axial/Segment"
+	raise Exception("Unsupported network type flags")
+
+
 class NetworkInputPage(BasePage):
-	def __init__(self, point_src_available=False, axial=True):
+	def __init__(self, point_src_available=False, networkTypeFlags=NetworkTypeFlags.AXIAL_AND_SEGMENT):
 		BasePage.__init__(self)
 		self.setTitle("Input Tables")
 		self.setSubTitle(" ")
-		self.createWidgets(point_src_available, axial)
+		self.createWidgets(point_src_available, networkTypeFlags)
 
-	def createWidgets(self, point_src_available, axial):
+	def createWidgets(self, point_src_available, networkTypeFlags):
 		glayout = QGridLayout()
 
 		glayout.setColumnStretch(0, 0)
@@ -49,13 +66,13 @@ class NetworkInputPage(BasePage):
 		else:
 			self._pointsCombo = None
 
-		glayout.addWidget(QLabel("Axial/Segment lines" if axial else "Segment lines"), y, 0)
+		glayout.addWidget(QLabel(NetworkTypeTextFromFlags(networkTypeFlags) + " lines"), y, 0)
 		self._linesCombo = QComboBox()
 		self.regProp("in_network", WizProp(self._linesCombo, ""))
 		glayout.addWidget(self._linesCombo, y, 1)
 		y = y + 1
 
-		if axial:
+		if (networkTypeFlags & NetworkTypeFlags.AXIAL) != 0:
 			self._unlinksCombo = QComboBox()
 			self.regProp("in_unlinks", WizProp(self._unlinksCombo, ""))
 			self._unlinksCheck = WidgetEnableCheckBox("Unlink points", [self._unlinksCombo])

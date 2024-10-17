@@ -42,7 +42,10 @@ class NetworkIntegrationAnalysis(BaseAnalysis):
 
 		junctions_enabled = self._props['output_at_junctions']
 
-		radii_list = RadiiFromSettings(pstalgo, self._props).split()
+		#radii_list = RadiiFromSettings(pstalgo, self._props).split()
+		radii_list = [
+			pstalgo.Radii(steps = self._props['rad_steps'] if self._props.get('rad_steps_enabled') else None)
+		]
 
 		# Tasks
 		class Tasks(object):

@@ -22,7 +22,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 from qgis.PyQt.QtWidgets import QComboBox, QLabel, QMessageBox, QVBoxLayout
 from ..widgets import PropertySheetWidget, WidgetEnableCheckBox
 from ..wizard import BaseWiz, BasePage, WizProp, WizPropFloat
-from ..pages import FinishPage, NetworkInputPage, ProgressPage, ReadyPage, RadiusPage, RadiusType, RadiusTypePropName
+from ..pages import FinishPage, ProgressPage, ReadyPage, RadiusPage, RadiusType, RadiusTypePropName
 
 
 class SegmentGroupIntegrationWiz(BaseWiz):

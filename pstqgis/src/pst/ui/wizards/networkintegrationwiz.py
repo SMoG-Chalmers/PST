@@ -22,15 +22,15 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 from qgis.PyQt.QtWidgets import QVBoxLayout
 from ..widgets import PropertySheetWidget
 from ..wizard import BaseWiz, BasePage, WizProp, WizPropFloat
-from ..pages import FinishPage, NetworkInputPage, ProgressPage, ReadyPage, RadiusPage
+from ..pages import FinishPage, NetworkInputPage, NetworkTypeFlags, ProgressPage, ReadyPage, RadiusPage, RadiusType
 
 
 class NetworkIntegrationWiz(BaseWiz):
 	def __init__(self, parent, settings, model, task_factory):
 		BaseWiz.__init__(self, parent, settings, model, "Network Integration")
 		self._task_factory = task_factory
-		self.addPage(NetworkInputPage(point_src_available=False))
-		self.addPage(RadiusPage())
+		self.addPage(NetworkInputPage(point_src_available=False, networkTypeFlags=NetworkTypeFlags.AXIAL))
+		self.addPage(RadiusPage(radius_types=[RadiusType.STEPS]))
 		self.addPage(OutputPage())
 		self.addPage(ReadyPage())
 		self.addPage(ProgressPage())

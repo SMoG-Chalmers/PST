@@ -21,14 +21,14 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 from qgis.PyQt.QtWidgets import QMessageBox, QVBoxLayout
 from ..wizard import BaseWiz, BasePage, WizProp, WizPropFloat
-from ..pages import FinishPage, NetworkInputPage, ProgressPage, ReadyPage, RadiusPage
+from ..pages import FinishPage, NetworkInputPage, NetworkTypeFlags, ProgressPage, ReadyPage, RadiusPage
 from ..widgets import PropertySheetWidget
 
 class AngularIntegrationWiz(BaseWiz):
 	def __init__(self, parent, settings, model, task_factory):
 		BaseWiz.__init__(self, parent, settings, model, "Angular Integration")
 		self._task_factory = task_factory
-		self.addPage(NetworkInputPage(point_src_available=False, axial=False))
+		self.addPage(NetworkInputPage(point_src_available=False, networkTypeFlags=NetworkTypeFlags.SEGMENT))
 		self.addPage(CalcOptionsPage())
 		self.addPage(RadiusPage())
 		self.addPage(OutputPage())

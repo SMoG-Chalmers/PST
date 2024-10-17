@@ -22,7 +22,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 from builtins import object
 from qgis.PyQt.QtWidgets import QGridLayout
 from ..wizard import BasePage, WizProp, WizPropFloat
-from ..widgets import PropertySheetWidget
+from ..widgets import PropertySheetWidget, PropertyStyle, PropertyState
 
 class RadiusType(object):
 	STRAIGHT=0
@@ -44,15 +44,15 @@ def RadiusTypePropName(radius_type):
 
 def AddRadiusProperties(prop_sheet, radius_types):
 	if RadiusType.STRAIGHT in radius_types:
-		prop_sheet.addNumberProp("Straight line distance", 1000, 0, "meters",  RadiusTypePropName(RadiusType.STRAIGHT), True, False)
+		prop_sheet.addNumberProp("Straight line distance", 1000, 0, "meters",  RadiusTypePropName(RadiusType.STRAIGHT), style=PropertyStyle.CHECK, default_state=PropertyState.UNCHECKED)
 	if RadiusType.WALKING in radius_types:
-		prop_sheet.addNumberProp("Walking distance",       1000, 0, "meters",  RadiusTypePropName(RadiusType.WALKING),  True, False)
+		prop_sheet.addNumberProp("Walking distance",       1000, 0, "meters",  RadiusTypePropName(RadiusType.WALKING),  style=PropertyStyle.CHECK, default_state=PropertyState.UNCHECKED)
 	if RadiusType.STEPS in radius_types:
-		prop_sheet.addNumberProp("Axial/segment steps",       2, 0, "steps",   RadiusTypePropName(RadiusType.STEPS),    True, False)
+		prop_sheet.addNumberProp("Axial/segment steps",       2, 0, "steps",   RadiusTypePropName(RadiusType.STEPS),    style=PropertyStyle.CHECK, default_state=PropertyState.UNCHECKED)
 	if RadiusType.ANGULAR in radius_types:
-		prop_sheet.addNumberProp("Angular",                 180, 0, "degrees", RadiusTypePropName(RadiusType.ANGULAR),  True, False)
+		prop_sheet.addNumberProp("Angular",                 180, 0, "degrees", RadiusTypePropName(RadiusType.ANGULAR),  style=PropertyStyle.CHECK, default_state=PropertyState.UNCHECKED)
 	if RadiusType.AXMETER in radius_types:
-		prop_sheet.addNumberProp("Axialmeter",             2000, 0, "steps*m", RadiusTypePropName(RadiusType.AXMETER),  True, False)
+		prop_sheet.addNumberProp("Axialmeter",             2000, 0, "steps*m", RadiusTypePropName(RadiusType.AXMETER),  style=PropertyStyle.CHECK, default_state=PropertyState.UNCHECKED)
 
 class RadiusWidget(PropertySheetWidget):
 	def __init__(self, wizard_page, radius_types):

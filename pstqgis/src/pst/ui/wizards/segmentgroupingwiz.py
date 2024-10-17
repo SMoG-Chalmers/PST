@@ -21,7 +21,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 from qgis.PyQt.QtWidgets import QCheckBox, QVBoxLayout
 from ..wizard import BaseWiz, BasePage, WizProp
-from ..pages import FinishPage, NetworkInputPage, ProgressPage, ReadyPage
+from ..pages import FinishPage, NetworkInputPage, NetworkTypeFlags, ProgressPage, ReadyPage
 from ..widgets import PropertySheetWidget, WidgetEnableCheckBox
 
 
@@ -29,7 +29,7 @@ class SegmentGroupingWiz(BaseWiz):
 	def __init__(self, parent, settings, model, task_factory):
 		BaseWiz.__init__(self, parent, settings, model, "Segment Grouping")
 		self._task_factory = task_factory
-		self.addPage(NetworkInputPage(point_src_available=False, axial=False))
+		self.addPage(NetworkInputPage(point_src_available=False, networkTypeFlags=NetworkTypeFlags.SEGMENT))
 		self.addPage(OptionsPage())
 		self.addPage(ReadyPage())
 		self.addPage(ProgressPage())

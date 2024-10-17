@@ -21,7 +21,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 from qgis.PyQt.QtWidgets import QGridLayout, QMessageBox, QVBoxLayout
 from ..wizard import BaseWiz, BasePage, WizProp, WizPropFloat
-from ..pages import FinishPage, NetworkInputPage, ProgressPage, ReadyPage, RadiusPage
+from ..pages import FinishPage, NetworkInputPage, NetworkTypeFlags, ProgressPage, ReadyPage, RadiusPage
 from ..widgets import PropertySheetWidget
 
 class AngularChoiceWiz(BaseWiz):
@@ -29,7 +29,7 @@ class AngularChoiceWiz(BaseWiz):
 		BaseWiz.__init__(self, parent, settings, model, "Angular Choice")
 		self._task_factory = task_factory
 		pages = [
-			NetworkInputPage(point_src_available=False, axial=False),
+			NetworkInputPage(point_src_available=False, networkTypeFlags=NetworkTypeFlags.SEGMENT),
 			CalcOptionsPage(),
 			RadiusPage(),
 			OutputPage(),

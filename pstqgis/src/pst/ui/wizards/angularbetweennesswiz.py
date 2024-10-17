@@ -21,7 +21,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 from qgis.PyQt.QtWidgets import QGridLayout, QMessageBox, QVBoxLayout
 from ..wizard import BaseWiz, BasePage, WizProp, WizPropFloat
-from ..pages import FinishPage, NetworkInputPage, ProgressPage, ReadyPage, RadiusPage, RadiusType
+from ..pages import FinishPage, NetworkInputPage, NetworkTypeFlags, ProgressPage, ReadyPage, RadiusPage, RadiusType
 from ..widgets import PropertySheetWidget
 
 class AngularBetweennessWiz(BaseWiz):
@@ -29,7 +29,7 @@ class AngularBetweennessWiz(BaseWiz):
 		BaseWiz.__init__(self, parent, settings, model, "Angular Betweenness")
 		self._task_factory = task_factory
 		pages = [
-			NetworkInputPage(point_src_available=False, axial=False),
+			NetworkInputPage(point_src_available=False, networkTypeFlags=NetworkTypeFlags.SEGMENT),
 			CalcOptionsPage(),
 			RadiusPage(radius_types=[RadiusType.WALKING]),
 			OutputPage(),

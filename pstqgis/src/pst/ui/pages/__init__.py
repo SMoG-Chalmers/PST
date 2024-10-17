@@ -23,7 +23,7 @@ from .columncopypage import ColumnCopyPage
 from .entrypointspage import EntryPointsPage
 from .finishpage import FinishPage
 from .graphinputpage import GraphInputPage
-from .networkinputpage import NetworkInputPage
+from .networkinputpage import NetworkInputPage, NetworkTypeFlags
 from .progresspage import ProgressPage
 from .radiuspage import RadiusPage, AddRadiusProperties, RadiusWidget, RadiusType, RadiusTypePropName
 from .readypage import ReadyPage

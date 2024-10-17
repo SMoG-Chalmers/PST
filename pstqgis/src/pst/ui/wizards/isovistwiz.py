@@ -25,7 +25,7 @@ from ...model import GeometryType
 from ...maptools.isovist.layerselection import LayerSelectionView, LayerSelectionItem
 from ...maptools.isovist.common import allLayers, isPointLayer, isPolygonLayer
 from ..wizard import BaseWiz, BasePage, WizPropBase, WizProp, WizPropFloat
-from ..pages import FinishPage, NetworkInputPage, ProgressPage, ReadyPage
+from ..pages import FinishPage, ProgressPage, ReadyPage
 from ..widgets import PropertySheetWidget
 
 
