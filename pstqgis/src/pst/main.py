@@ -36,7 +36,7 @@ import os, pathlib
 MENU_TITLE = APP_TITLE
 
 ENABLE_EXPERIMENTAL_ANALYSES = True
-ENABLE_MAP_TOOLS = True
+ENABLE_MAP_TOOLS = False
 
 QGIS_ERROR_LEVEL_FROM_PSTA_LEVEL = [Qgis.Info, Qgis.Info, Qgis.Warning, Qgis.Critical]
 
@@ -119,8 +119,8 @@ class PSTPlugin(object):
 			('Attraction Distance',    lambda : self.onAnalysis(wizards.AttractionDistanceWiz,    analyses.AttractionDistanceAnalysis), None),
 			('Attraction Reach',       lambda : self.onAnalysis(wizards.AttractionReachWiz,       analyses.AttractionReachAnalysis), None),
 			('Attraction Betweenness', lambda : self.onAnalysis(wizards.AttractionBetweennessWiz, analyses.AttractionBetweennessAnalysis), None),
-			None,
-			('Create Isovists',        lambda : self.onAnalysis(wizards.IsovistWiz,               analyses.IsovistAnalysis), None),
+			#None,
+			#('Create Isovists',        lambda : self.onAnalysis(wizards.IsovistWiz,               analyses.IsovistAnalysis), None),
 		]
 
 		actions = []
