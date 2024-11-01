@@ -29,8 +29,9 @@ class NetworkIntegrationWiz(BaseWiz):
 	def __init__(self, parent, settings, model, task_factory):
 		BaseWiz.__init__(self, parent, settings, model, "Network Integration")
 		self._task_factory = task_factory
-		self.addPage(NetworkInputPage(point_src_available=False, networkTypeFlags=NetworkTypeFlags.AXIAL))
-		self.addPage(RadiusPage(radius_types=[RadiusType.STEPS]))
+		network_type_flags = NetworkTypeFlags.AXIAL
+		self.addPage(NetworkInputPage(point_src_available=False, networkTypeFlags=network_type_flags))
+		self.addPage(RadiusPage(radius_types=[RadiusType.STEPS], network_type_flags=network_type_flags))
 		self.addPage(OutputPage())
 		self.addPage(ReadyPage())
 		self.addPage(ProgressPage())
