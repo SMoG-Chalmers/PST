@@ -27,6 +27,8 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 struct SRasterToPolygonsDesc 
 {
+	PSTA_DECL_STRUCT_NAME(SRasterToPolygonsDesc)
+	
 	SRasterToPolygonsDesc() : m_Version(VERSION) {}
 
 	// Version

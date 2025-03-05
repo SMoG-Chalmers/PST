@@ -99,6 +99,8 @@ namespace psta
 
 struct SRasterData
 {
+	PSTA_DECL_STRUCT_NAME(SRasterData)
+	
 	SRasterData() : m_Version(VERSION) {}
 
 	// Version

@@ -27,6 +27,8 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 struct SCompareResultsDesc 
 {
+	PSTA_DECL_STRUCT_NAME(SCompareResultsDesc)
+		
 	SCompareResultsDesc() : m_Version(VERSION) {}
 
 	// Version

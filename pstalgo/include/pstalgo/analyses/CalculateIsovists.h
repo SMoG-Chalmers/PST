@@ -27,6 +27,8 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 struct SCreateIsovistContextDesc 
 {
+	PSTA_DECL_STRUCT_NAME(SCreateIsovistContextDesc)
+		
 	struct SPolygons
 	{
 		uint32_t  GroupCount;
@@ -68,6 +70,8 @@ PSTADllExport psta_handle_t PSTACreateIsovistContext(const SCreateIsovistContext
 
 struct SCalculateIsovistDesc
 {
+	PSTA_DECL_STRUCT_NAME(SCalculateIsovistDesc)
+		
 	SCalculateIsovistDesc() : m_Version(VERSION) {}
 
 	// Version

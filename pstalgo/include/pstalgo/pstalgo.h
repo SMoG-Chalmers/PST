@@ -59,3 +59,6 @@ typedef int psta_result_t;
 #define PSTA_RESULT_ERROR 1
 
 PSTADllExport void PSTAFree(IPSTAlgo* algo);
+
+#define PSTA_DECL_STRUCT_NAME(T) inline static char* TypeName() { return #T; }
+#define PSTA_STRUCT_NAME(T) T::TypeName()

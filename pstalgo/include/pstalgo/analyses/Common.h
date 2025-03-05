@@ -24,6 +24,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 #include <limits>
 #include <stdexcept>
 #include <pstalgo/pstalgo.h>
+#include <pstalgo/Error.h>
 
 enum EPSTANetworkElement
 {
@@ -114,6 +115,6 @@ inline void VerifyStructVersion(const T& s)
 {
 	if (T::VERSION != s.m_Version)
 	{
-		throw std::runtime_error("Version mismatch");
+		throw psta::FormatException<std::runtime_error>("Version mismatch for struct '%s'. Got version %d but expected %d.", PSTA_STRUCT_NAME(T), s.m_Version, T::VERSION);
 	}
 }
