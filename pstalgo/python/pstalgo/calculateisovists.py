@@ -71,14 +71,14 @@ class IsovistContextGeometry:
 
 class IsovistContextPolygons:
 	def __init__(self):
-		self.polygonCountPerGroup = []
-		self.pointCountPerPolygon = []
-		self.coords = []
+		self.polygonCountPerGroup = None
+		self.pointCountPerPolygon = None
+		self.coords = None
 
 class IsovistContextPoints:
 	def __init__(self):
-		self.pointCountPerGroup = []
-		self.coords = []
+		self.pointCountPerGroup = None
+		self.coords = None
 
 
 class SCreateIsovistContextDesc(Structure) :

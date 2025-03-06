@@ -19,94 +19,48 @@ You should have received a copy of the GNU Lesser General Public License
 along with PST. If not, see <http://www.gnu.org/licenses/>.
 """
 
-import array
-import unittest
-import pstalgo
+import math, unittest, pstalgo
 from .common import IsRoughlyEqual
 
 
 class TestCalculateIsovists(unittest.TestCase):
 
-    """
-    def test_calculateisovists_1(self):
-        polygons = [
-             [(-5, 5), (-5,-5), (5,-5), (5, 5)],
-        ]
-        origins = [
-            (0,0),
-        ]
-        expected_isovists = [
-             [(-5, 5), (5, 5), (5,-5), (-5,-5)],
-        ]
-        self._runTest(polygons, origins, 10, 64, expected_isovists)
-
-    def test_calculateisovists_2(self):
-        polygons = [
-             [(-5, 5), (-5,-5), (5,-5), (5, 5)],
-             [(-1,-2), (0,-2), (0,-3)],
-        ]
-        origins = [
-            (0,0),
-        ]
-        expected_isovists = [
-             [(-5, 5), (5, 5), (5,-5), (0,-5), (0,-2), (-1,-2), (-2.5,-5), (-5,-5)],
-        ]
-        self._runTest(polygons, origins, 10, 64, expected_isovists)
-
-    def test_calculateisovists_clip(self):
-        polygons = [
-             [(-5, 5), (-5,-5), (5,-5), (5, 5)],
-        ]
-        origins = [
-            (0,0),
-        ]
-        expected_isovists = [
-             [(-5,2.5), (-2.5,5), (2.5,5), (5,2.5), (5,-2.5), (2.5,-5), (-2.5,-5), (-5,-2.5)],
-        ]
-        self._runTest(polygons, origins, 7.5, 4, expected_isovists)
-    """
-    
     def test_calculateisovists_perimeter(self):
-        polygons = [
-        ]
-        origins = [
-            (0,0),
-        ]
-        r = 6.2666
-        expected_isovists = [
-             [(0,r), (r,0), (0, -r), (-r, 0)],
-        ]
-        self._runTest(polygons, origins, 5, 4, expected_isovists)
-    
-    def _runTest(self, polygons, origins, max_view_distance, perimeter_segment_count, expected_isovists):
-
-        point_count_per_polygon = array.array('I', [len(polygon) for polygon in polygons])
-        
-        polygon_coords = []
-        for polygon in polygons:
-            for pt in polygon:
-                polygon_coords.append(pt[0])
-                polygon_coords.append(pt[1])
-        polygon_coords = array.array('d', polygon_coords)
-
-        isovist_context = pstalgo.CreateIsovistContext(point_count_per_polygon, polygon_coords)
+        geometry = pstalgo.IsovistContextGeometry()
+        isovist_context = pstalgo.CreateIsovistContext(isovistContextGeometry = geometry)
 
         try:
-            for origin_index, origin in enumerate(origins):
-                (point_count, points, isovist_handle, area) = pstalgo.CalculateIsovist(isovist_context, origin[0], origin[1], max_view_distance, 360, 0, perimeter_segment_count)
+            r = 1
+            segmentCount = 4
+            rSegmented = r * self._calcRadForSegmentedCircle(segmentCount)
+            expectedIsovistCoords = [(0,rSegmented), (rSegmented,0), (0, -rSegmented), (-rSegmented, 0)]
+            (pointCount, points, isovistHandle, area, visibleObstacles, visibleAttractionPoints, visibleAttractionPolygons) = pstalgo.CalculateIsovist(
+                isovist_context=isovist_context, 
+                originX=0, 
+                originY=0, 
+                max_view_distance=r, 
+                field_of_view_degrees=360, 
+                direction_degrees=0, 
+                perimeter_segment_count=4)
 
-                polygon = []
-                for point_index in range(point_count):
-                    polygon.append((points[point_index * 2], points[point_index * 2 + 1]))
-                print(polygon)
-                self._compareIsovists(expected_isovists[origin_index], polygon)
-
-                pstalgo.Free(isovist_handle)
-
+            try:
+                isovistCoords = self._unpackIsovistCoords(points, pointCount)
+                self._compareIsovists(expectedIsovistCoords, isovistCoords)
+            finally:
+                pstalgo.Free(isovistHandle)
 
         finally:
             pstalgo.Free(isovist_context)
+ 
+    def _calcRadForSegmentedCircle(self, segmentCount):
+        halfAngle = math.pi / segmentCount
+        return math.sqrt(math.pi / (segmentCount * math.sin(halfAngle) * math.cos(halfAngle)))
 
+    def _unpackIsovistCoords(self, points, pointCount):
+        outCoords = []
+        for i in range(pointCount):
+            outCoords.append((points[i*2], points[i*2+1]))
+        return outCoords
 
     def _compareIsovists(self, actual, expected):
         self.assertEqual(len(actual), len(expected), "Length of actual and expected isovists do not match")
