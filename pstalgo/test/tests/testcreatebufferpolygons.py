@@ -45,7 +45,7 @@ class TestCreateBufferPolygons(unittest.TestCase):
             (0, 1),
             (1, 2),
         ]
-        (raster, handle1) = pstalgo.CompareResults(
+        (raster, compareMin, compareMax, handle1) = pstalgo.CompareResults(
             lineCoords1=lineCoords, 
             values1=values1, 
             lineCoords2=None, 
