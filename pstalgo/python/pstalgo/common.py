@@ -57,7 +57,8 @@ class DistanceType:
 	STEPS = 2
 	ANGULAR = 3
 	AXMETER = 4
-	UNDEFINED = 5
+	WEIGHTS = 5
+	UNDEFINED = 6
 
 class OriginType:
 	""" NOTE: Has to match EPSTAOriginType """

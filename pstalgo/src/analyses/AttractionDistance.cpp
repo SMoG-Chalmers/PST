@@ -201,11 +201,10 @@ namespace psta
 
 PSTADllExport bool PSTAAttractionDistance(const SPSTAAttractionDistanceDesc* desc)
 {
-	if (desc->VERSION != desc->m_Version)
-		return false;
-
 	try
 	{
+		VerifyStructVersion(*desc);
+
 		auto* axial_graph = (CAxialGraph*)desc->m_Graph;
 		ASSERT(axial_graph);
 
@@ -289,7 +288,13 @@ PSTADllExport bool PSTAAttractionDistance(const SPSTAAttractionDistanceDesc* des
 			psta::ResolveDistanceTypes((EPSTADistanceType)desc->m_DistanceType, desc->m_Radius, distance_types, limits, straight_line_limit);
 			ASSERT(distance_types.size() == limits.size());
 
-			const auto analysis_graph = psta::BuildDirectedMultiDistanceGraph(*axial_graph, distance_types.data(), distance_types.size(), false, attraction_points.data(), attraction_points.size(), destination_type);
+			const auto analysis_graph = psta::BuildDirectedMultiDistanceGraph(
+				*axial_graph, 
+				psta::span<const EPSTADistanceType>(distance_types.data(), distance_types.size()),
+				psta::span<const float>(desc->m_LineWeights, desc->m_LineWeightCount), 
+				false, 
+				attraction_points.data(), attraction_points.size(), 
+				destination_type);
 
 			CPSTAlgoProgressCallback progress(desc->m_ProgressCallback, desc->m_ProgressCallbackUser);
 

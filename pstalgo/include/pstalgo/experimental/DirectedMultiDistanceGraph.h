@@ -23,6 +23,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 #include <pstalgo/analyses/Common.h>
 #include <pstalgo/graph/AxialGraph.h>
+#include <pstalgo/utils/Span.h>
 #include <pstalgo/Debug.h>
 #include <pstalgo/Vec2.h>
 #include "SparseDirectedGraph.h"
@@ -99,8 +100,8 @@ namespace psta
 
 	CDirectedMultiDistanceGraph BuildDirectedMultiDistanceGraph(
 		const CAxialGraph& axial_graph,
-		const EPSTADistanceType* distance_types,
-		size_t distance_type_count,
+		psta::span<const EPSTADistanceType> distance_types,
+		psta::span<const float> line_weights,
 		bool store_node_positions,
 		const float2* origins,
 		size_t origin_count,

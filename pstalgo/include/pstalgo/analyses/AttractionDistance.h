@@ -27,9 +27,11 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 struct SPSTAAttractionDistanceDesc
 {
+	PSTA_DECL_STRUCT_NAME(SPSTAAttractionDistanceDesc)
+
 	// Version
-	static const unsigned int VERSION = 1;
-	unsigned int m_Version = VERSION;
+	static const unsigned int VERSION = 2;
+	const unsigned int m_Version = VERSION;
 
 	// Graph
 	HPSTAGraph m_Graph = nullptr;  // Created with a call to PSTACreateGraph
@@ -53,6 +55,10 @@ struct SPSTAAttractionDistanceDesc
 	unsigned int* m_PointsPerAttractionPolygon = nullptr;  // Polygons will be closed automatically, start/end point should NOT be repeated
 	unsigned int  m_AttractionPolygonCount = 0;
 	float         m_AttractionPolygonPointInterval = 0;
+
+	// Line weights (custom distance values)
+	const float* m_LineWeights = nullptr;
+	unsigned int m_LineWeightCount = 0;
 
 	// Progress Callback
 	FPSTAProgressCallback m_ProgressCallback = nullptr;

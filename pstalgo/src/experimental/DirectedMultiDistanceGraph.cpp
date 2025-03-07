@@ -99,22 +99,28 @@ namespace psta
 	 */
 	CDirectedMultiDistanceGraph BuildDirectedMultiDistanceGraph(
 		const CAxialGraph& axial_graph,
-		const EPSTADistanceType* distance_types,
-		size_t distance_type_count,
+		psta::span<const EPSTADistanceType> distance_types,
+		psta::span<const float> line_weights,
 		bool store_node_positions,
 		const float2* origins,
 		size_t origin_count,
 		EPSTANetworkElement destination_type)
 	{
-		const bool has_angular_distance = std::find(distance_types, distance_types + distance_type_count, EPSTADistanceType_Angular) != distance_types + distance_type_count;
+		const bool has_angular_distance = std::find(distance_types.begin(), distance_types.end(), EPSTADistanceType_Angular) != distance_types.end();
+		const bool has_weights_distance = std::find(distance_types.begin(), distance_types.end(), EPSTADistanceType_Weights) != distance_types.end();
 
 		// Verify supported distance types
-		const auto SUPPORTED_DISTANCE_TYPES_MASK = EPSTADistanceTypeMask_Walking | EPSTADistanceTypeMask_Steps | EPSTADistanceTypeMask_Angular;
-		for (unsigned int i = 0; i < distance_type_count; ++i)
-			if (!(EPSTADistanceMaskFromType(distance_types[i]) & SUPPORTED_DISTANCE_TYPES_MASK))
+		const auto SUPPORTED_DISTANCE_TYPES_MASK = EPSTADistanceTypeMask_Walking | EPSTADistanceTypeMask_Steps | EPSTADistanceTypeMask_Angular | EPSTADistanceTypeMask_Weights;
+		for (const auto distance_type : distance_types)
+			if (!(EPSTADistanceMaskFromType(distance_type) & SUPPORTED_DISTANCE_TYPES_MASK))
 				throw std::runtime_error("Unsupported distance type specified for building directed multi-distance graph");
 
-		CDirectedMultiDistanceGraph graph(distance_types, distance_type_count, store_node_positions);
+		if (has_weights_distance && line_weights.size() != (size_t)axial_graph.getLineCount())
+		{
+			throw std::runtime_error("Size of line weight array doesn't match number of lines in graph");
+		}
+
+		CDirectedMultiDistanceGraph graph(distance_types.data(), distance_types.size(), store_node_positions);
 
 		switch (destination_type)
 		{
@@ -168,6 +174,8 @@ namespace psta
 				const auto& lc = axial_graph.getLineCrossing(i);
 				const auto& line = axial_graph.getLine(lc.iLine);
 
+				const float inverseLineLength = (line.length > 0) ? (1.f / line.length) : 0;
+
 				if (has_angular_distance)
 				{
 					// First pass is forwards (0), second pass backwards (1)
@@ -190,7 +198,9 @@ namespace psta
 							const auto node_idx_fwd = lc_src.iOpposite * 2;
 							const auto node_idx_bwd = node_idx_fwd + 1;
 							SEdgeData edge_data;
-							edge_data.m_Distances[EPSTADistanceType_Walking] = fabs(lc.linePos - lc_src.linePos);
+							const float walkingDistance = fabs(lc.linePos - lc_src.linePos);
+							edge_data.m_Distances[EPSTADistanceType_Walking] = walkingDistance;
+							edge_data.m_Distances[EPSTADistanceType_Weights] = line_weights.empty() ? 0 : (line_weights[lc.iLine] * walkingDistance * inverseLineLength);
 							edge_data.m_Distances[EPSTADistanceType_Steps] = 1;
 							if (pass)
 							{
@@ -222,7 +232,9 @@ namespace psta
 								SEdgeData edge_data;
 								if (pass)
 								{
-									edge_data.m_Distances[EPSTADistanceType_Walking] = fabs(lc.linePos - pt.linePos) + pt.distFromLine;
+									const float distanceAlongLine = fabs(lc.linePos - pt.linePos);
+									edge_data.m_Distances[EPSTADistanceType_Walking] = distanceAlongLine + pt.distFromLine;
+									edge_data.m_Distances[EPSTADistanceType_Weights] = line_weights.empty() ? 0 : (line_weights[lc.iLine] * distanceAlongLine * inverseLineLength);
 									edge_data.m_TargetIndex = pt_idx;
 									edge_data.m_TargetHandle = CDirectedMultiDistanceGraph::INVALID_HANDLE;
 								}
@@ -244,7 +256,9 @@ namespace psta
 									SEdgeData edge_data;
 									if (pass)
 									{
-										edge_data.m_Distances[EPSTADistanceType_Walking] = fabs(lc_dst.linePos - lc.linePos);
+										const float walkingDistance = fabs(lc_dst.linePos - lc.linePos);
+										edge_data.m_Distances[EPSTADistanceType_Walking] = walkingDistance;
+										edge_data.m_Distances[EPSTADistanceType_Weights] = line_weights.empty() ? 0 : (line_weights[lc.iLine] * walkingDistance * inverseLineLength);
 										edge_data.m_TargetIndex = lc_dst.iCrossing;
 										edge_data.m_TargetHandle = CDirectedMultiDistanceGraph::INVALID_HANDLE;
 									}
@@ -261,7 +275,9 @@ namespace psta
 									SEdgeData edge_data;
 									if (pass)
 									{
-										edge_data.m_Distances[EPSTADistanceType_Walking] = fabs(lc.linePos - center_pos);
+										const float walkingDistance = fabs(lc.linePos - center_pos);
+										edge_data.m_Distances[EPSTADistanceType_Walking] = walkingDistance;
+										edge_data.m_Distances[EPSTADistanceType_Weights] = line_weights.empty() ? 0 : (line_weights[lc.iLine] * walkingDistance * inverseLineLength);
 										edge_data.m_TargetIndex = lc.iLine;
 										edge_data.m_TargetHandle = CDirectedMultiDistanceGraph::INVALID_HANDLE;
 									}
@@ -285,7 +301,7 @@ namespace psta
 								const auto& edge_data = edges[edge_index];
 								e.SetTarget(edge_data.m_TargetHandle, edge_data.m_TargetIndex);
 								auto* dists = graph.EdgeDistances(e);
-								for (unsigned int d = 0; d < distance_type_count; ++d)
+								for (unsigned int d = 0; d < (unsigned int)distance_types.size(); ++d)
 									dists[d] = edge_data.m_Distances[distance_types[d]];
 								++edge_index;
 							});
@@ -308,8 +324,10 @@ namespace psta
 						SEdgeData edge_data;
 						if (pass)
 						{
-							edge_data.m_Distances[EPSTADistanceType_Walking] = fabs(lc.linePos - lc_src.linePos);
+							const float walkingDistance = fabs(lc.linePos - lc_src.linePos);
+							edge_data.m_Distances[EPSTADistanceType_Walking] = walkingDistance;
 							edge_data.m_Distances[EPSTADistanceType_Steps] = 1;
+							edge_data.m_Distances[EPSTADistanceType_Weights] = line_weights.empty() ? 0 : (line_weights[lc.iLine] * walkingDistance * inverseLineLength);
 							edge_data.m_TargetIndex = lc_src.iOpposite;
 							edge_data.m_TargetHandle = graph.NodeHandleFromIndex(edge_data.m_TargetIndex);
 						}
@@ -327,7 +345,9 @@ namespace psta
 							SEdgeData edge_data;
 							if (pass)
 							{
-								edge_data.m_Distances[EPSTADistanceType_Walking] = fabs(lc.linePos - pt.linePos) + pt.distFromLine;
+								const float distanceAlongLine = fabs(lc.linePos - pt.linePos);
+								edge_data.m_Distances[EPSTADistanceType_Walking] = distanceAlongLine + pt.distFromLine;
+								edge_data.m_Distances[EPSTADistanceType_Weights] = line_weights.empty() ? 0 : (line_weights[lc.iLine] * distanceAlongLine * inverseLineLength);
 								edge_data.m_TargetIndex = pt_idx;
 								edge_data.m_TargetHandle = CDirectedMultiDistanceGraph::INVALID_HANDLE;
 							}
@@ -348,7 +368,9 @@ namespace psta
 								SEdgeData edge_data;
 								if (pass)
 								{
-									edge_data.m_Distances[EPSTADistanceType_Walking] = fabs(lc_dst.linePos - lc.linePos);
+									const float walkingDistance = fabs(lc_dst.linePos - lc.linePos);
+									edge_data.m_Distances[EPSTADistanceType_Walking] = walkingDistance;
+									edge_data.m_Distances[EPSTADistanceType_Weights] = line_weights.empty() ? 0 : (line_weights[lc.iLine] * walkingDistance * inverseLineLength);
 									edge_data.m_TargetIndex = lc_dst.iCrossing;
 									edge_data.m_TargetHandle = CDirectedMultiDistanceGraph::INVALID_HANDLE;
 								}
@@ -362,7 +384,9 @@ namespace psta
 							if (pass)
 							{
 								const float center_pos = line.length * .5f;
-								edge_data.m_Distances[EPSTADistanceType_Walking] = fabs(lc.linePos - center_pos);
+								const float walkingDistance = fabs(lc.linePos - center_pos);
+								edge_data.m_Distances[EPSTADistanceType_Walking] = walkingDistance;
+								edge_data.m_Distances[EPSTADistanceType_Weights] = line_weights.empty() ? 0 : (line_weights[lc.iLine] * walkingDistance * inverseLineLength);
 								edge_data.m_TargetIndex = lc.iLine;
 								edge_data.m_TargetHandle = CDirectedMultiDistanceGraph::INVALID_HANDLE;
 							}
@@ -384,7 +408,7 @@ namespace psta
 							const auto& edge_data = edges[edge_index];
 							e.SetTarget(edge_data.m_TargetHandle, edge_data.m_TargetIndex);
 							auto* dists = graph.EdgeDistances(e);
-							for (unsigned int d = 0; d < distance_type_count; ++d)
+							for (unsigned int d = 0; d < (unsigned int)distance_types.size(); ++d)
 								dists[d] = edge_data.m_Distances[distance_types[d]];
 							++edge_index;
 						});
@@ -401,7 +425,8 @@ namespace psta
 			float dist_from_origin_to_line, pos_on_line;
 			const auto line_index = axial_graph.getClosestLine(origins[i], &dist_from_origin_to_line, &pos_on_line);
 			const auto& line = axial_graph.getLine(line_index);
-			
+			const float inverseLineLength = (line.length > 0) ? (1.f / line.length) : 0;
+
 			edges.clear();
 			
 			// Edges to line-crossings
@@ -412,8 +437,10 @@ namespace psta
 				const auto& line_dst = axial_graph.getLine(lc_dst.iLine);
 
 				SEdgeData edge_data;
-				edge_data.m_Distances[EPSTADistanceType_Walking] = dist_from_origin_to_line + fabs(pos_on_line - lc_src.linePos);
+				const float distanceAlongLine = fabs(pos_on_line - lc_src.linePos);
+				edge_data.m_Distances[EPSTADistanceType_Walking] = dist_from_origin_to_line + distanceAlongLine;
 				edge_data.m_Distances[EPSTADistanceType_Steps]   = 1;
+				edge_data.m_Distances[EPSTADistanceType_Weights] = line_weights.empty() ? 0 : (line_weights[line_index] * distanceAlongLine * inverseLineLength);
 
 				if (has_angular_distance)
 				{
@@ -447,7 +474,9 @@ namespace psta
 					const auto pt_idx = axial_graph.getLinePoint(line.iFirstPoint + p);
 					const auto& pt = axial_graph.getPoint(pt_idx);
 					SEdgeData edge_data;
-					edge_data.m_Distances[EPSTADistanceType_Walking] = dist_from_origin_to_line + fabs(pos_on_line - pt.linePos) + pt.distFromLine;
+					const float distanceAlongLine = fabs(pos_on_line - pt.linePos);
+					edge_data.m_Distances[EPSTADistanceType_Walking] = dist_from_origin_to_line + distanceAlongLine + pt.distFromLine;
+					edge_data.m_Distances[EPSTADistanceType_Weights] = line_weights.empty() ? 0 : (line_weights[line_index] * distanceAlongLine * inverseLineLength);
 					edge_data.m_TargetIndex = pt_idx;
 					edge_data.m_TargetHandle = CDirectedMultiDistanceGraph::INVALID_HANDLE;
 					edges.push_back(edge_data);
@@ -463,7 +492,9 @@ namespace psta
 					{
 						temp_vec.push_back(lc_dst.iCrossing);
 						SEdgeData edge_data;
-						edge_data.m_Distances[EPSTADistanceType_Walking] = dist_from_origin_to_line + fabs(lc_dst.linePos - pos_on_line);
+						const float distanceAlongLine = fabs(lc_dst.linePos - pos_on_line);
+						edge_data.m_Distances[EPSTADistanceType_Walking] = dist_from_origin_to_line + distanceAlongLine;
+						edge_data.m_Distances[EPSTADistanceType_Weights] = line_weights.empty() ? 0 : (line_weights[line_index] * distanceAlongLine * inverseLineLength);
 						edge_data.m_TargetIndex = lc_dst.iCrossing;
 						edge_data.m_TargetHandle = CDirectedMultiDistanceGraph::INVALID_HANDLE;
 						edges.push_back(edge_data);
@@ -474,7 +505,9 @@ namespace psta
 				{
 					SEdgeData edge_data;
 					const float center_pos = line.length * .5f;
-					edge_data.m_Distances[EPSTADistanceType_Walking] = dist_from_origin_to_line + fabs(center_pos - pos_on_line);
+					const float distanceAlongLine = fabs(center_pos - pos_on_line);
+					edge_data.m_Distances[EPSTADistanceType_Walking] = dist_from_origin_to_line + distanceAlongLine;
+					edge_data.m_Distances[EPSTADistanceType_Weights] = line_weights.empty() ? 0 : (line_weights[line_index] * distanceAlongLine * inverseLineLength);
 					edge_data.m_TargetIndex = line_index;
 					edge_data.m_TargetHandle = CDirectedMultiDistanceGraph::INVALID_HANDLE;
 					edges.push_back(edge_data);
@@ -493,7 +526,7 @@ namespace psta
 				const auto& edge_data = edges[edge_index];
 				e.SetTarget(edge_data.m_TargetHandle, edge_data.m_TargetIndex);
 				auto* dists = graph.EdgeDistances(e);
-				for (unsigned int d = 0; d < distance_type_count; ++d)
+				for (unsigned int d = 0; d < (unsigned int)distance_types.size(); ++d)
 					dists[d] = edge_data.m_Distances[distance_types[d]];
 				++edge_index;
 			});

@@ -48,7 +48,8 @@ enum EPSTADistanceType
 	EPSTADistanceType_Steps,
 	EPSTADistanceType_Angular,
 	EPSTADistanceType_Axmeter,
-	
+	EPSTADistanceType_Weights,
+
 	EPSTADistanceType_Undefined,
 	EPSTADistanceType__COUNT = EPSTADistanceType_Undefined
 };
@@ -62,6 +63,7 @@ enum EPSTADistanceTypeMask
 	EPSTADistanceTypeMask_Steps    = EPSTADistanceMaskFromType(EPSTADistanceType_Steps),
 	EPSTADistanceTypeMask_Angular  = EPSTADistanceMaskFromType(EPSTADistanceType_Angular),
 	EPSTADistanceTypeMask_Axmeter  = EPSTADistanceMaskFromType(EPSTADistanceType_Axmeter),
+	EPSTADistanceTypeMask_Weights  = EPSTADistanceMaskFromType(EPSTADistanceType_Weights),
 };
 
 enum EPSTARoadNetworkType

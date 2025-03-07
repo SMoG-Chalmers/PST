@@ -35,6 +35,8 @@ namespace psta
 		span(T* elements, size_t size) : m_Data(elements), m_Size(size) {}
 		span(T* begin, T* end) : m_Data(begin), m_Size(end - begin) {}
 
+		inline bool empty() const { return 0 == m_Size; }
+
 		inline size_t size() const { return m_Size; }
 
 		inline T* data() { return m_Data; }
