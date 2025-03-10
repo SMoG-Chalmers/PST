@@ -1,3 +1,3 @@
 @ECHO OFF
-"c:\Program Files\Python37-64\python.exe" main.py
+py -3-64 main.py
 pause
