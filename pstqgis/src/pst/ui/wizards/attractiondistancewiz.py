@@ -19,10 +19,10 @@ You should have received a copy of the GNU Lesser General Public License
 along with PST. If not, see <http://www.gnu.org/licenses/>.
 """
 
-from qgis.PyQt.QtWidgets import QGridLayout, QLabel, QLineEdit, QMessageBox, QRadioButton, QVBoxLayout
+from qgis.PyQt.QtWidgets import QComboBox, QGridLayout, QLabel, QLineEdit, QMessageBox, QRadioButton, QVBoxLayout
 from ..wizard import BaseWiz, BasePage, WizProp, WizPropFloat
 from ..pages import EntryPointsPage, FinishPage, GraphInputPage, ProgressPage, RadiusPage, ReadyPage
-from ..widgets import PropertySheetWidget, PropertyStyle, PropertyState, TableDataSelectionWidget, WidgetEnableRadioButton
+from ..widgets import PropertySheetWidget, PropertyStyle, PropertyState, TableDataSelectionWidget, WidgetEnableRadioButton, WidgetEnableCheckBox
 
 
 class AttractionDistanceWiz(BaseWiz):
@@ -68,13 +68,25 @@ class CalcOptionsPage(BasePage):
 		for m in self.DIST_MODES:
 			prop_sheet.addBoolProp(m[0], m[1], m[2])
 
+		#Add control for distance weights. We do it seperately because the addBoolProp method above cannot handle comboboxes
+		self._dist_weightsCombo = QComboBox()
+		self.regProp("dw_attribute", Wizprop(self._dist_weightsCombo, ""))
+		self._dist_weightsCheck = WidgetEnableCheckBox("Other weight (custom)", [self._dist_weightsCombo])
+		self.regProp("dist_weights", WizProp(self._dist_weightsCheck, False))
+		prop_sheet.add(self._dist_weightsCheck, self._dist_weightsCombo)
+
 		vlayout = QVBoxLayout()
 		vlayout.addWidget(prop_sheet)
 		vlayout.addStretch(1)
 		self.setLayout(vlayout)
 
+	def initializePage(self):
+		for attr in self.mode().columnnames(self.wizard().prop("in_network")):
+			self._dist_weightsCombo.addItem(attr)
+	
+
 	def validatePage(self):
-		if not [True for m in self.DIST_MODES if self.wizard().prop(m[2])]:
+		if not ([True for m in self.DIST_MODES if self.wizard().prop(m[2])] or bool(self.wizard().prop("dist_weights"))):
 			QMessageBox.information(self, "Incomplete input", "Please select at least one distance mode.")
 		else:
 			return True
