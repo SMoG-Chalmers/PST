@@ -31,13 +31,15 @@ class RadiusType(object):
 	STEPS=2
 	ANGULAR=3
 	AXMETER=4
+	WEIGHTS=5
 
 RADIUS_PROP_NAMES = {
 	RadiusType.STRAIGHT : "rad_straight",
 	RadiusType.WALKING  : "rad_walking",
 	RadiusType.STEPS    : "rad_steps",
 	RadiusType.ANGULAR  : "rad_angular",
-	RadiusType.AXMETER  : "rad_axmeter"
+	RadiusType.AXMETER  : "rad_axmeter",
+	RadiusType.WEIGHTS  : "rad_weights"
 }
 
 def RadiusTypePropName(radius_type):
@@ -59,6 +61,8 @@ def AddRadiusProperties(prop_sheet, radius_types, network_type_flags=NetworkType
 		prop_sheet.addNumberProp("Angular",                 180, 0, "degrees", RadiusTypePropName(RadiusType.ANGULAR),  style=PropertyStyle.CHECK, default_state=PropertyState.UNCHECKED)
 	if RadiusType.AXMETER in radius_types:
 		prop_sheet.addNumberProp("Axialmeter",             2000, 0, "steps*m", RadiusTypePropName(RadiusType.AXMETER),  style=PropertyStyle.CHECK, default_state=PropertyState.UNCHECKED)
+	if RadiusType.WEIGHTS in radius_types:
+		prop_sheet.addNumberProp("Other weight (custom)",     0, 0, "varies", RadiusTypePropName(RadiusType.WEIGHTS),  style=PropertyStyle.CHECK, default_state=PropertyState.UNCHECKED)
 
 class RadiusWidget(PropertySheetWidget):
 	def __init__(self, wizard_page, radius_types, network_type_flags=NetworkTypeFlags.AXIAL_AND_SEGMENT):
@@ -67,7 +71,7 @@ class RadiusWidget(PropertySheetWidget):
 		AddRadiusProperties(self, radius_types, network_type_flags)
 
 class RadiusPage(BasePage):
-	def __init__(self, radius_types=[RadiusType.STRAIGHT, RadiusType.WALKING, RadiusType.STEPS, RadiusType.ANGULAR, RadiusType.AXMETER], network_type_flags=NetworkTypeFlags.AXIAL_AND_SEGMENT):
+	def __init__(self, radius_types=[RadiusType.STRAIGHT, RadiusType.WALKING, RadiusType.STEPS, RadiusType.ANGULAR, RadiusType.AXMETER, RadiusType.WEIGHTS], network_type_flags=NetworkTypeFlags.AXIAL_AND_SEGMENT):
 		BasePage.__init__(self)
 		self.setTitle("Radius")
 		self.setSubTitle("Please select radius type and range")
