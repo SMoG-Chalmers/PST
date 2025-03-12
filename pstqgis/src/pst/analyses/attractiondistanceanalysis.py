@@ -130,16 +130,26 @@ class AttractionDistanceAnalysis(BaseAnalysis):
 					# Allocate output array
 					scores = Vector(ctypes.c_float, output_count, stack_allocator, output_count)
 					# Analysis
+					if distance_type == 5: #if distance_type = weights
+						line_weight_table = props['in_network']
+						line_weight_attribute = props['dw_attribute']
+						weight_values = Vector(ctypes.c_float, line_rows.size(), stack_allocator)
+						for value in AttractionValueGen(model, line_weight_table, line_rows, [line_weight_attribute], progress):
+							weight_values.append(value)
+						line_weights = weight_values
+					else:
+						line_weights = None		
 					pstalgo.AttractionDistance(
-						graph_handle = graph,
-						origin_type = origin_type,
-						distance_type = distance_type,
-						radius = radii,
-						attraction_points = attr_points_filtered,
-						points_per_polygon = attr_points_per_polygon_filtered,
-						polygon_point_interval = props['dest_poly_edge_point_interval'],
-						progress_callback = pstalgo.CreateAnalysisDelegateCallbackWrapper(analysis_progress),
-						out_min_distances = scores)
+							graph_handle = graph,
+							origin_type = origin_type,
+							distance_type = distance_type,
+							radius = radii,
+							attraction_points = attr_points_filtered,
+							points_per_polygon = attr_points_per_polygon_filtered,
+							polygon_point_interval = props['dest_poly_edge_point_interval'],
+							line_weights=line_weights,
+							progress_callback = pstalgo.CreateAnalysisDelegateCallbackWrapper(analysis_progress),
+							out_min_distances = scores)
 					# Output column
 					attr_title = GenerateAttractionDataName(props['in_destinations'], attr_col, props['dest_name'])
 					columns.append((GenerateColumnName(attr_title, distance_type, radii), 'float', scores.values()))

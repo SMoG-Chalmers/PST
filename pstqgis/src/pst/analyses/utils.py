@@ -235,6 +235,8 @@ def DistanceTypesFromSettings(pstalgo, props):
 		distance_types.append(pstalgo.DistanceType.ANGULAR)
 	if props.get('dist_axmeter'):
 		distance_types.append(pstalgo.DistanceType.AXMETER)
+	if props.get('dist_weights'):
+		distance_types.append(pstalgo.DistanceType.WEIGHTS)
 	return distance_types
 
 def MeanDepthGen(TD_vector, N_vector):

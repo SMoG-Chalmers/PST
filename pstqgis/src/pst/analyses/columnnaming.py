@@ -43,6 +43,7 @@ class ColName(object):
 	DIST_STEPS    = "s"
 	DIST_ANGULAR  = "a"
 	DIST_AXMETER  = "am"
+	DIST_WEIGHTS  = "dw"
 
 	# Radius
 	RADIUS_STRAIGHT = "l%s"
@@ -130,6 +131,7 @@ def PSTADistanceTypeToString(distance_type):
 			DistanceType.STEPS    : ColName.DIST_STEPS,
 			DistanceType.ANGULAR  : ColName.DIST_ANGULAR,
 			DistanceType.AXMETER  : ColName.DIST_AXMETER,
+			DistanceType.WEIGHTS  : ColName.DIST_WEIGHTS,
 		}
 	text = PSTA_DISTANCE_TYPE_TO_STRING.get(distance_type)
 	if text is None:
