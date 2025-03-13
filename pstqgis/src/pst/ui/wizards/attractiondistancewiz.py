@@ -21,9 +21,8 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 from qgis.PyQt.QtWidgets import QComboBox, QGridLayout, QLabel, QLineEdit, QMessageBox, QRadioButton, QVBoxLayout
 from ..wizard import BaseWiz, BasePage, WizProp, WizPropFloat
-from ..pages import EntryPointsPage, FinishPage, GraphInputPage, ProgressPage, RadiusPage, ReadyPage, RadiusType
+from ..pages import EntryPointsPage, FinishPage, GraphInputPage, ProgressPage, RadiusPage, ReadyPage
 from ..widgets import PropertySheetWidget, PropertyStyle, PropertyState, TableDataSelectionWidget, WidgetEnableRadioButton, WidgetEnableCheckBox
-from ...model import QGISModel 
 
 class AttractionDistanceWiz(BaseWiz):
 	def __init__(self, parent, settings, model, task_factory):

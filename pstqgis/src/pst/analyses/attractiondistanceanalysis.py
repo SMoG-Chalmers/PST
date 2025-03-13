@@ -130,15 +130,14 @@ class AttractionDistanceAnalysis(BaseAnalysis):
 					# Allocate output array
 					scores = Vector(ctypes.c_float, output_count, stack_allocator, output_count)
 					# Analysis
-					if distance_type == 5: #if distance_type = weights
+					if distance_type == pstalgo.DistanceType.WEIGHTS:
 						line_weight_table = props['in_network']
 						line_weight_attribute = props['dw_attribute']
 						weight_values = Vector(ctypes.c_float, line_rows.size(), stack_allocator)
-						for value in AttractionValueGen(model, line_weight_table, line_rows, [line_weight_attribute], progress):
-							weight_values.append(value)
+						self._model.readValues(line_weight_table, line_weight_attribute, line_rows, weight_values)
 						line_weights = weight_values
 					else:
-						line_weights = None		
+						line_weights = None
 					pstalgo.AttractionDistance(
 							graph_handle = graph,
 							origin_type = origin_type,
