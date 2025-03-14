@@ -65,11 +65,14 @@ class AttractionDistanceAnalysis(BaseAnalysis):
 		class Tasks(object):
 			READ_ATTRACTIONS = 1
 			BUILD_GRAPH = 2
-			ANALYSIS = 3
-			WRITE_RESULTS = 4
+			READ_WEIGHTS = 3
+			ANALYSIS = 4
+			WRITE_RESULTS = 5
 		progress = MultiTaskProgressDelegate(delegate)
 		progress.addTask(Tasks.READ_ATTRACTIONS, 1, None)
 		progress.addTask(Tasks.BUILD_GRAPH, 1, None)
+		if pstalgo.DistanceType.WEIGHTS in distance_types:
+			progress.addTask(Tasks.READ_WEIGHTS, 1, "Reading line weights")
 		progress.addTask(Tasks.ANALYSIS, 5*analysis_count, None)
 		progress.addTask(Tasks.WRITE_RESULTS, 1, None)
 
@@ -113,6 +116,15 @@ class AttractionDistanceAnalysis(BaseAnalysis):
 			attr_points_temp = None
 			attr_points_per_polygon_temp = None
 
+			# Read line weights
+			progress.setCurrentTask(Tasks.READ_WEIGHTS)
+
+			if pstalgo.DistanceType.WEIGHTS in distance_types:
+				line_weight_table = props['in_network']
+				line_weight_attribute = props['dw_attribute']
+				weight_values = Vector(ctypes.c_float, line_rows.size(), stack_allocator)
+				self._model.readValues(line_weight_table, line_weight_attribute, line_rows, weight_values, progress)
+
 			progress.setCurrentTask(Tasks.ANALYSIS)
 			analysis_progress = TaskSplitProgressDelegate(analysis_count, "Performing analysis", progress)
 			for attr_col in attraction_columns:
@@ -131,10 +143,6 @@ class AttractionDistanceAnalysis(BaseAnalysis):
 					scores = Vector(ctypes.c_float, output_count, stack_allocator, output_count)
 					# Analysis
 					if distance_type == pstalgo.DistanceType.WEIGHTS:
-						line_weight_table = props['in_network']
-						line_weight_attribute = props['dw_attribute']
-						weight_values = Vector(ctypes.c_float, line_rows.size(), stack_allocator)
-						self._model.readValues(line_weight_table, line_weight_attribute, line_rows, weight_values)
 						line_weights = weight_values
 					else:
 						line_weights = None
