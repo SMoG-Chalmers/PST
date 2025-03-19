@@ -102,6 +102,7 @@ namespace psta
 		const CAxialGraph& axial_graph,
 		psta::span<const EPSTADistanceType> distance_types,
 		psta::span<const float> line_weights,
+		float weight_per_meter_for_point_edges,
 		bool store_node_positions,
 		const float2* origins,
 		size_t origin_count,

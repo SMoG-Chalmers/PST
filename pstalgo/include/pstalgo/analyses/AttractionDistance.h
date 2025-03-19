@@ -30,7 +30,7 @@ struct SPSTAAttractionDistanceDesc
 	PSTA_DECL_STRUCT_NAME(SPSTAAttractionDistanceDesc)
 
 	// Version
-	static const unsigned int VERSION = 2;
+	static const unsigned int VERSION = 3;
 	const unsigned int m_Version = VERSION;
 
 	// Graph
@@ -59,6 +59,7 @@ struct SPSTAAttractionDistanceDesc
 	// Line weights (custom distance values)
 	const float* m_LineWeights = nullptr;
 	unsigned int m_LineWeightCount = 0;
+	float m_WeightPerMeterForPointEdges = 0;
 
 	// Progress Callback
 	FPSTAProgressCallback m_ProgressCallback = nullptr;

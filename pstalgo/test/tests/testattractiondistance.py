@@ -48,7 +48,7 @@ class TestAttractionDistance(unittest.TestCase):
 		g = CreateTestGraph(count, length)
 		attraction_points = array.array('d', [-1, 0])
 		line_weights = array.array('f', [1,2,3,4,5])
-		self.doTest(g, OriginType.POINTS, DistanceType.WEIGHTS, Radii(), attraction_points, [0.5, 2, 4.5, 8, 12.5], line_weights=line_weights)
+		self.doTest(g, OriginType.POINTS, DistanceType.WEIGHTS, Radii(), attraction_points, [3.5, 5, 7.5, 11, 15.5], line_weights=line_weights, weight_per_meter_for_point_edges=1.5)
 		pstalgo.FreeGraph(g)
 
 	def test_adi_polygon(self):
@@ -81,7 +81,7 @@ class TestAttractionDistance(unittest.TestCase):
 		self.doTest(g, OriginType.POINTS,    DistanceType.ANGULAR, Radii(steps=4,angular=121,walking=6.9), attraction_points, [-1])
 		pstalgo.FreeGraph(g)
 
-	def doTest(self, graph, origin_type, distance_type, radius, attraction_points, min_dists_check, points_per_polygon=None, polygon_point_interval=0, line_weights=None):
+	def doTest(self, graph, origin_type, distance_type, radius, attraction_points, min_dists_check, points_per_polygon=None, polygon_point_interval=0, line_weights=None, weight_per_meter_for_point_edges=0):
 		min_dists = array.array('f', [0])*len(min_dists_check)
 		pstalgo.AttractionDistance(
 			graph_handle = graph,
@@ -92,7 +92,8 @@ class TestAttractionDistance(unittest.TestCase):
 			out_min_distances = min_dists,
 			points_per_polygon = points_per_polygon,
 			polygon_point_interval = polygon_point_interval,
-			line_weights = line_weights)
+			line_weights = line_weights,
+			weight_per_meter_for_point_edges = weight_per_meter_for_point_edges)
 		self.assertTrue(IsArrayRoughlyEqual(min_dists, min_dists_check), str(min_dists) + " != " + str(min_dists_check))
 
 def CreateTestGraph(line_count, line_length):

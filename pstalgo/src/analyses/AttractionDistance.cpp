@@ -291,7 +291,8 @@ PSTADllExport bool PSTAAttractionDistance(const SPSTAAttractionDistanceDesc* des
 			const auto analysis_graph = psta::BuildDirectedMultiDistanceGraph(
 				*axial_graph, 
 				psta::span<const EPSTADistanceType>(distance_types.data(), distance_types.size()),
-				psta::span<const float>(desc->m_LineWeights, desc->m_LineWeightCount), 
+				psta::span<const float>(desc->m_LineWeights, desc->m_LineWeightCount),
+				desc->m_WeightPerMeterForPointEdges,
 				false, 
 				attraction_points.data(), attraction_points.size(), 
 				destination_type);

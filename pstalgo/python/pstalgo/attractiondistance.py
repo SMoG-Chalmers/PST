@@ -56,6 +56,7 @@ class SPSTAAttractionDistanceDesc(Structure) :
 		# Line weights (custom distance values)
 		("m_LineWeights", POINTER(c_float)),
 		("m_LineWeightCount", c_uint),
+		("m_WeightPerMeterForPointEdges", c_float),
 
 		# Progress Callback
 		("m_ProgressCallback", PSTALGO_PROGRESS_CALLBACK),
@@ -68,10 +69,10 @@ class SPSTAAttractionDistanceDesc(Structure) :
 	]
 	def __init__(self, *args):
 		Structure.__init__(self, *args)
-		self.m_Version = 2
+		self.m_Version = 3
 
 
-def AttractionDistance(graph_handle, origin_type=OriginType.LINES, distance_type=DistanceType.STEPS, radius=Radii(), attraction_points=None, points_per_polygon=None, polygon_point_interval=0, line_weights=None, progress_callback = None, out_min_distances=None):
+def AttractionDistance(graph_handle, origin_type=OriginType.LINES, distance_type=DistanceType.STEPS, radius=Radii(), attraction_points=None, points_per_polygon=None, polygon_point_interval=0, line_weights=None, weight_per_meter_for_point_edges=0, progress_callback = None, out_min_distances=None):
 	desc = SPSTAAttractionDistanceDesc()
 	# Graph
 	desc.m_Graph = graph_handle
@@ -92,6 +93,7 @@ def AttractionDistance(graph_handle, origin_type=OriginType.LINES, distance_type
 	desc.m_AttractionPolygonPointInterval = polygon_point_interval
 	# Line Weights
 	(desc.m_LineWeights, desc.m_LineWeightCount) = UnpackArray(line_weights, 'f')
+	desc.m_WeightPerMeterForPointEdges = weight_per_meter_for_point_edges
 	# Progress Callback
 	desc.m_ProgressCallback = CreateCallbackWrapper(progress_callback)
 	desc.m_ProgressCallbackUser = c_void_p() 

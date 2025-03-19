@@ -101,6 +101,7 @@ namespace psta
 		const CAxialGraph& axial_graph,
 		psta::span<const EPSTADistanceType> distance_types,
 		psta::span<const float> line_weights,
+		float weight_per_meter_for_point_edges,
 		bool store_node_positions,
 		const float2* origins,
 		size_t origin_count,
@@ -234,7 +235,7 @@ namespace psta
 								{
 									const float distanceAlongLine = fabs(lc.linePos - pt.linePos);
 									edge_data.m_Distances[EPSTADistanceType_Walking] = distanceAlongLine + pt.distFromLine;
-									edge_data.m_Distances[EPSTADistanceType_Weights] = line_weights.empty() ? 0 : (line_weights[lc.iLine] * distanceAlongLine * inverseLineLength);
+									edge_data.m_Distances[EPSTADistanceType_Weights] = (line_weights.empty() ? 0 : (line_weights[lc.iLine] * distanceAlongLine * inverseLineLength)) + weight_per_meter_for_point_edges * pt.distFromLine;
 									edge_data.m_TargetIndex = pt_idx;
 									edge_data.m_TargetHandle = CDirectedMultiDistanceGraph::INVALID_HANDLE;
 								}
@@ -347,7 +348,7 @@ namespace psta
 							{
 								const float distanceAlongLine = fabs(lc.linePos - pt.linePos);
 								edge_data.m_Distances[EPSTADistanceType_Walking] = distanceAlongLine + pt.distFromLine;
-								edge_data.m_Distances[EPSTADistanceType_Weights] = line_weights.empty() ? 0 : (line_weights[lc.iLine] * distanceAlongLine * inverseLineLength);
+								edge_data.m_Distances[EPSTADistanceType_Weights] = (line_weights.empty() ? 0 : (line_weights[lc.iLine] * distanceAlongLine * inverseLineLength)) + weight_per_meter_for_point_edges * pt.distFromLine;
 								edge_data.m_TargetIndex = pt_idx;
 								edge_data.m_TargetHandle = CDirectedMultiDistanceGraph::INVALID_HANDLE;
 							}
@@ -440,7 +441,7 @@ namespace psta
 				const float distanceAlongLine = fabs(pos_on_line - lc_src.linePos);
 				edge_data.m_Distances[EPSTADistanceType_Walking] = dist_from_origin_to_line + distanceAlongLine;
 				edge_data.m_Distances[EPSTADistanceType_Steps]   = 1;
-				edge_data.m_Distances[EPSTADistanceType_Weights] = line_weights.empty() ? 0 : (line_weights[line_index] * distanceAlongLine * inverseLineLength);
+				edge_data.m_Distances[EPSTADistanceType_Weights] = (line_weights.empty() ? 0 : (line_weights[line_index] * distanceAlongLine * inverseLineLength)) + weight_per_meter_for_point_edges * dist_from_origin_to_line;
 
 				if (has_angular_distance)
 				{
@@ -476,7 +477,7 @@ namespace psta
 					SEdgeData edge_data;
 					const float distanceAlongLine = fabs(pos_on_line - pt.linePos);
 					edge_data.m_Distances[EPSTADistanceType_Walking] = dist_from_origin_to_line + distanceAlongLine + pt.distFromLine;
-					edge_data.m_Distances[EPSTADistanceType_Weights] = line_weights.empty() ? 0 : (line_weights[line_index] * distanceAlongLine * inverseLineLength);
+					edge_data.m_Distances[EPSTADistanceType_Weights] = (line_weights.empty() ? 0 : (line_weights[line_index] * distanceAlongLine * inverseLineLength)) + weight_per_meter_for_point_edges * (dist_from_origin_to_line + pt.distFromLine);
 					edge_data.m_TargetIndex = pt_idx;
 					edge_data.m_TargetHandle = CDirectedMultiDistanceGraph::INVALID_HANDLE;
 					edges.push_back(edge_data);
