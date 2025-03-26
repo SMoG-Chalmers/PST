@@ -23,7 +23,7 @@ from builtins import str
 from builtins import range
 from builtins import object
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtWidgets import QCheckBox, QComboBox, QLineEdit, QListWidget, QRadioButton, QWizard, QWizardPage
+from qgis.PyQt.QtWidgets import QCheckBox, QComboBox, QLineEdit, QListWidget, QRadioButton, QWizard, QWizardPage, QDoubleSpinBox
 from ... import APP_TITLE
 
 BASE_TITLE = APP_TITLE
@@ -54,6 +54,8 @@ class WizProp(object):
 		widget = self._widget
 		if isinstance(widget, QLineEdit):
 			widget.setText(self.toString(value))
+		elif isinstance(widget, QDoubleSpinBox):
+			widget.setValue(value)
 		elif isinstance(widget, QCheckBox):
 			widget.setCheckState(Qt.Checked if bool(value) else Qt.Unchecked)
 		elif isinstance(widget, QRadioButton):

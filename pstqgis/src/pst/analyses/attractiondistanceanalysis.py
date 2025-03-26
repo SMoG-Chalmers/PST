@@ -122,8 +122,10 @@ class AttractionDistanceAnalysis(BaseAnalysis):
 			if pstalgo.DistanceType.WEIGHTS in distance_types:
 				line_weight_table = props['in_network']
 				line_weight_attribute = props['dw_attribute']
+				point_connection_weight = props['point_connection_weight']
 				weight_values = Vector(ctypes.c_float, line_rows.size(), stack_allocator)
 				self._model.readValues(line_weight_table, line_weight_attribute, line_rows, weight_values, progress)
+
 
 			progress.setCurrentTask(Tasks.ANALYSIS)
 			analysis_progress = TaskSplitProgressDelegate(analysis_count, "Performing analysis", progress)
@@ -146,6 +148,7 @@ class AttractionDistanceAnalysis(BaseAnalysis):
 						line_weights = weight_values
 					else:
 						line_weights = None
+						point_connection_weight = None
 					pstalgo.AttractionDistance(
 							graph_handle = graph,
 							origin_type = origin_type,
@@ -155,6 +158,7 @@ class AttractionDistanceAnalysis(BaseAnalysis):
 							points_per_polygon = attr_points_per_polygon_filtered,
 							polygon_point_interval = props['dest_poly_edge_point_interval'],
 							line_weights=line_weights,
+							weight_per_meter_for_point_edges=point_connection_weight,
 							progress_callback = pstalgo.CreateAnalysisDelegateCallbackWrapper(analysis_progress),
 							out_min_distances = scores)
 					# Output column

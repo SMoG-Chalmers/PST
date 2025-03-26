@@ -18,8 +18,8 @@ GNU Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License
 along with PST. If not, see <http://www.gnu.org/licenses/>.
 """
-
-from qgis.PyQt.QtWidgets import QComboBox, QGridLayout, QLabel, QLineEdit, QMessageBox, QRadioButton, QVBoxLayout
+from qgis.core import QgsProject
+from qgis.PyQt.QtWidgets import QComboBox, QGridLayout, QLabel, QLineEdit, QMessageBox, QRadioButton, QVBoxLayout, QDoubleSpinBox
 from ..wizard import BaseWiz, BasePage, WizProp, WizPropFloat
 from ..pages import EntryPointsPage, FinishPage, GraphInputPage, ProgressPage, RadiusPage, ReadyPage
 from ..widgets import PropertySheetWidget, PropertyStyle, PropertyState, TableDataSelectionWidget, WidgetEnableRadioButton, WidgetEnableCheckBox
@@ -32,6 +32,7 @@ class AttractionDistanceWiz(BaseWiz):
 			GraphInputPage(origins_available=True, skip_next_page_if_no_regions=True),
 			EntryPointsPage(distribution_function_available=False),
 			CalcOptionsPage(),
+			WeightPage(),
 			RadiusPage(),
 			DestinationPage(),
 			ReadyPage(),
@@ -53,6 +54,7 @@ class CalcOptionsPage(BasePage):
 		("Axial/segment lines (steps)",     False, "dist_steps"),
 		("Angle (degrees)",                 False, "dist_angular"),
 		("Axialmeter (steps*meters)",       False, "dist_axmeter"),
+		("Attribute-based weight (varies)", False, "dist_weights"),
 	]
 
 	def __init__(self):
@@ -67,12 +69,46 @@ class CalcOptionsPage(BasePage):
 		for m in self.DIST_MODES:
 			prop_sheet.addBoolProp(m[0], m[1], m[2])
 
-		#Add control for distance weights
+		vlayout = QVBoxLayout()
+		vlayout.addWidget(prop_sheet)
+		vlayout.addStretch(1)
+		self.setLayout(vlayout)
+
+
+
+	def nextId(self):
+		if not self.wizard().properties().get("dist_weights"):
+			return self.wizard().currentId() + 2  # Skip next page
+		return BasePage.nextId(self)
+
+	def validatePage(self):
+		if not ([True for m in self.DIST_MODES if self.wizard().prop(m[2])]):
+			QMessageBox.information(self, "Incomplete input", "Please select at least one distance mode.")
+		else:
+			return True
+		return False
+
+
+class WeightPage(BasePage):
+	def __init__(self):
+		BasePage.__init__(self)
+		self.setTitle("Custom weight settings")
+		self.setSubTitle(" ")
+		self.createWidgets()
+
+	def createWidgets(self):
+		prop_sheet = PropertySheetWidget(self)
+		prop_sheet.newSection("Weights configuration")
+
 		self._dist_weightsCombo = QComboBox()
+		prop_sheet.add(QLabel("Line weight attribute"), self._dist_weightsCombo)
 		self.regProp("dw_attribute", WizProp(self._dist_weightsCombo, ""))
-		self._dist_weightsCheck = WidgetEnableCheckBox("Other weight (custom)", [self._dist_weightsCombo])
-		self.regProp("dist_weights", WizProp(self._dist_weightsCheck, False))
-		prop_sheet.add(self._dist_weightsCheck, self._dist_weightsCombo)
+
+		self._point_connection_weightSpinBox = QDoubleSpinBox()	
+		self._point_connection_weightSpinBox.setRange(0, 99999)
+		prop_sheet.add(QLabel("Point connection weight"), self._point_connection_weightSpinBox, QLabel("per meter"))
+		self.regProp("point_connection_weight", WizProp(self._point_connection_weightSpinBox, ""))
+
 
 		vlayout = QVBoxLayout()
 		vlayout.addWidget(prop_sheet)
@@ -80,18 +116,23 @@ class CalcOptionsPage(BasePage):
 		self.setLayout(vlayout)
 
 	def initializePage(self):
+		self._dist_weightsCombo.clear()
 		for attr in self.model().columnNames(self.wizard().prop("in_network")):
 			#weights can only be integers or doubles, not strings
 			if self.model().columnType(self.wizard().prop("in_network"), attr) in ["integer", "double"]:
 				self._dist_weightsCombo.addItem(attr)
-
 	def validatePage(self):
-		if not ([True for m in self.DIST_MODES if self.wizard().prop(m[2])] or bool(self.wizard().prop("dist_weights"))):
-			QMessageBox.information(self, "Incomplete input", "Please select at least one distance mode.")
+		layer = QgsProject.instance().mapLayersByName(self.wizard().prop("in_network"))[0]
+		field_name = self.wizard().prop("dw_attribute")
+
+		idx = layer.fields().indexOf(field_name)
+		min_value = layer.minimumValue(idx)
+
+		if min_value < 0:
+				QMessageBox.information(self, "Wrong input", "Selected attribute field must not contain negative values")
 		else:
 			return True
 		return False
-
 CUSTOM_COLUMN_NAME_CHAR_LIMIT = 2
 
 class DestinationPage(BasePage):
