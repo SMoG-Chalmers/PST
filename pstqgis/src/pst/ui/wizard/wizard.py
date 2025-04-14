@@ -55,7 +55,7 @@ class WizProp(object):
 		if isinstance(widget, QLineEdit):
 			widget.setText(self.toString(value))
 		elif isinstance(widget, QDoubleSpinBox):
-			widget.setValue(value)
+			widget.setValue(0 if type(value) is str else value)
 		elif isinstance(widget, QCheckBox):
 			widget.setCheckState(Qt.Checked if bool(value) else Qt.Unchecked)
 		elif isinstance(widget, QRadioButton):

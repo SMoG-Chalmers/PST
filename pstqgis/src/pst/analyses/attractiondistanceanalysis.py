@@ -117,9 +117,8 @@ class AttractionDistanceAnalysis(BaseAnalysis):
 			attr_points_per_polygon_temp = None
 
 			# Read line weights
-			progress.setCurrentTask(Tasks.READ_WEIGHTS)
-
 			if pstalgo.DistanceType.WEIGHTS in distance_types:
+				progress.setCurrentTask(Tasks.READ_WEIGHTS)
 				line_weight_table = props['in_network']
 				line_weight_attribute = props['dw_attribute']
 				point_connection_weight = props['point_connection_weight']
@@ -148,7 +147,7 @@ class AttractionDistanceAnalysis(BaseAnalysis):
 						line_weights = weight_values
 					else:
 						line_weights = None
-						point_connection_weight = None
+						point_connection_weight = 0
 					pstalgo.AttractionDistance(
 							graph_handle = graph,
 							origin_type = origin_type,
