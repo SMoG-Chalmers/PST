@@ -107,7 +107,7 @@ class WeightPage(BasePage):
 		self._point_connection_weightSpinBox = QDoubleSpinBox()	
 		self._point_connection_weightSpinBox.setRange(0, 99999)
 		prop_sheet.add(QLabel("Point connection weight"), self._point_connection_weightSpinBox, QLabel("per meter"))
-		self.regProp("point_connection_weight", WizProp(self._point_connection_weightSpinBox, ""))
+		self.regProp("point_connection_weight", WizProp(self._point_connection_weightSpinBox, 0))
 
 
 		vlayout = QVBoxLayout()
