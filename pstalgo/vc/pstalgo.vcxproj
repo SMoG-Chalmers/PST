@@ -38,6 +38,7 @@
     <ClInclude Include="..\include\pstalgo\analyses\SegmentGroupIntegration.h" />
     <ClInclude Include="..\include\pstalgo\BFS.h" />
     <ClInclude Include="..\include\pstalgo\Debug.h" />
+    <ClInclude Include="..\include\pstalgo\Error.h" />
     <ClInclude Include="..\include\pstalgo\experimental\ArrayView.h" />
     <ClInclude Include="..\include\pstalgo\experimental\DirectedMultiDistanceGraph.h" />
     <ClInclude Include="..\include\pstalgo\experimental\FastSegmentBetweenness.h" />
