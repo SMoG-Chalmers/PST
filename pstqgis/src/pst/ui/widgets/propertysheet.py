@@ -84,6 +84,13 @@ class PropertySheetWidget(QWidget):
 		self.add(widget)
 		return widget
 
+	def addTextProp(self, title, default_value, prop_name):
+		label = QLabel(title)
+		edit = QLineEdit()
+		self._page.regProp(prop_name, WizProp(edit, default_value))
+		self.add(label, edit)
+		return edit
+
 	def addNumberProp(self, title, default_value, decimals, unit, prop_name, style=PropertyStyle.LABEL, default_state=PropertyState.CHECKED):
 		edit = QLineEdit()
 		edit.setAlignment(Qt.AlignRight)

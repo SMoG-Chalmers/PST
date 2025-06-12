@@ -164,6 +164,10 @@ class WizPropCombo(object):
 		return self._default
 
 	def setValue(self, value):
+		if value is None:
+			if self._combobox.count() > 0:
+				self._combobox.setCurrentIndex(0)
+				return
 		for i in range(self._combobox.count()):
 			if self._combobox.itemData(i) == value:
 				self._combobox.setCurrentIndex(i)
@@ -212,6 +216,9 @@ class BaseWiz(QWizard):
 
 	def prop(self, name):
 		return self._props[name]
+
+	def setProp(self, name, value):
+		self._props[name] = value
 
 	def addPage(self, page):
 		QWizard.addPage(self, page)
