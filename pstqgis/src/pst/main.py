@@ -119,6 +119,7 @@ class PSTPlugin(object):
 			('Attraction Distance',    lambda : self.onAnalysis(wizards.AttractionDistanceWiz,    analyses.AttractionDistanceAnalysis), None),
 			('Attraction Reach',       lambda : self.onAnalysis(wizards.AttractionReachWiz,       analyses.AttractionReachAnalysis), None),
 			('Attraction Betweenness', lambda : self.onAnalysis(wizards.AttractionBetweennessWiz, analyses.AttractionBetweennessAnalysis), None),
+			('Origin-Destination Betweenness', lambda : self.onAnalysis(wizards.ODBetweennessWiz, analyses.ODBetweennessAnalysis), None),
 			#None,
 			#('Create Isovists',        lambda : self.onAnalysis(wizards.IsovistWiz,               analyses.IsovistAnalysis), None),
 		]
