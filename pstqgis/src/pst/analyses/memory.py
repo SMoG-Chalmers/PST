@@ -27,14 +27,6 @@ import ctypes
 
 DEBUG_OUTPUT=False
 
-CTYPE_SIZES = {
-	ctypes.c_double : 8,
-	ctypes.c_float : 4,
-	ctypes.c_uint : 4,
-	ctypes.c_longlong : 8,
-}
-
-
 class StackAllocator(object):
 
 	def __init__(self, min_block_size=64*1024*1024):
@@ -57,7 +49,7 @@ class StackAllocator(object):
 			self._blocks[i].reset()
 
 	def alloc(self, ctype, elem_count):
-		size_bytes = int(elem_count * CTYPE_SIZES[ctype])
+		size_bytes = int(elem_count * ctypes.sizeof(ctype))
 		for block in self._blocks:
 			if size_bytes <= block.availBytes():
 				return ctypes.cast(block.alloc(size_bytes), ctypes.POINTER(ctype))
