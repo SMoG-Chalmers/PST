@@ -22,7 +22,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 from builtins import str
 from builtins import range
 from builtins import object
-from qgis.PyQt.QtCore import Qt, QVariant
+from qgis.PyQt.QtCore import Qt, QVariant, QMetaType
 from qgis.PyQt.QtGui import QColor
 import array, math
 
@@ -47,8 +47,21 @@ VARIANT_FROM_COLUMN_TYPE = {
 	"integer" : QVariant.Int,
 	"float"   : QVariant.Double,
 	"double"  : QVariant.Double,
+	"string"  : QVariant.String
 }
 
+COLUMN_TYPE_FROM_VARIANT = {
+	QVariant.Int       : ("integer", False),
+	QVariant.UInt      : ("integer", False),  # Is there a better alternative?
+	QVariant.LongLong  : ("integer", False),  # Is there a better alternative?
+	QVariant.ULongLong : ("integer", False),  # Is there a better alternative?
+	QVariant.String    : ("string",  True),
+	QVariant.Double    : ("double",  False),
+	QMetaType.Float    : ("float",   False),
+}
+
+# Type strings from https://api.qgis.org/api/classQgsVectorLayer.html (section "Memory data providerType (memory)")
+# Allowed type strings are "integer", "double" and "string".
 QGISTYPESTR_FROM_COLUMN_TYPE = {
 	"integer" : "integer",
 	"float"   : "double",
@@ -62,11 +75,33 @@ def QGISStringFromColumnType(typename):
 	typepart = typename if p < 0 else typename[:p]
 	return QGISTYPESTR_FROM_COLUMN_TYPE[typepart] + suffix
 
+def ParseColumnTypeStr(s):
+	p = s.find('(')
+	type_name = s if p < 0 else s[:p]
+	length = 0
+	precision = 0
+	args = [] if p < 0 else [arg.strip() for arg in s[p+1:s.find(')', p+1)].split(',')]
+	if 'string' == type_name:
+		if args:
+			length = int(args[0])
+	return (type_name, length, precision)
+
+def VariantTypeFromColumnTypeName(type_name):
+	if type_name not in VARIANT_FROM_COLUMN_TYPE:
+		raise Exception("Can't deduce variant type from type name '%s'" % type_name)
+	return VARIANT_FROM_COLUMN_TYPE[type_name]
+
 def QGISGeometryTypeStringFromGeometryType(geo_type):
 	s = QGIS_GEO_TYPE_STR_FROM_GEO_TYPE.get(geo_type)
 	if s is None:
 		raise Exception("Unknown geometry type '%s'" % geo_type)
 	return s
+
+def TypeStringFromVariantType(qvtype, size):
+	t = COLUMN_TYPE_FROM_VARIANT.get(qvtype)
+	if not t:
+		raise Exception("Unsupported QVariant '%s' (typeid %d) encountered when generating type string" % (QVariant.typeToName(qvtype), qvtype))
+	return t[0] if not t[1] else "%s(%d)" % (t[0], size)
 
 class QGISModel(object):
 	def __init__(self):
@@ -86,22 +121,7 @@ class QGISModel(object):
 	def columnType(self, table, column):
 		layer = self._layerFromName(table)
 		field = layer.fields()[self._safeFieldIndex(layer, column)]
-		field_type = field.type()
-		# Type strings from https://api.qgis.org/api/classQgsVectorLayer.html (section "Memory data providerType (memory)")
-		# Allowed type strings are "integer", "double" and "string".
-		if QVariant.Int == field_type:
-			return "integer"
-		elif QVariant.UInt == field_type:
-			return "integer"  # Isn't there a better one?
-		elif QVariant.LongLong == field_type:
-			return "integer"  # Isn't there a better one?
-		elif QVariant.ULongLong == field_type:
-			return "integer"  # Isn't there a better one?
-		elif QVariant.Double == field_type:
-			return "double"
-		elif QVariant.String == field_type:
-			return "string(%d)" % field.length()
-		return None
+		return TypeStringFromVariantType(field.type(), field.length())
 
 	def createPoint(self, x, y):
 		return QgsGeometry.fromPointXY(QgsPointXY(x, y))
@@ -361,7 +381,12 @@ class QGISModel(object):
 		data_provider = layer.dataProvider()
 
 		# Create new fields in table (if any)
-		new_fields = [QgsField(t[0], VARIANT_FROM_COLUMN_TYPE[t[1]]) for t in name_type_iter_list if -1 == data_provider.fieldNameIndex(t[0])]
+		new_fields = []
+		for t in name_type_iter_list:
+			if -1 == data_provider.fieldNameIndex(t[0]):
+				(type_name, length, precision) = ParseColumnTypeStr(t[1])
+				variant_type = VariantTypeFromColumnTypeName(type_name)
+				new_fields.append(QgsField(t[0], type=variant_type, len=length, prec=precision))
 		if new_fields:
 			if not data_provider.addAttributes(new_fields):
 				raise Exception("Couldn't add fields to table '%s'!"%table_name)
