@@ -27,8 +27,8 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 namespace psta
 {
-	template <typename TOriginPoints, typename TDestinationPoints, typename TResults>
-	void CalcStraightLineMinDistances(const TOriginPoints& origin_pts, const TDestinationPoints& dest_pts, float radius, TResults&& ret_min_dist_per_origin)
+	template <typename TOriginPoints, typename TDestinationPoints, typename TMinDistArr, typename TDestIndexArr>
+	void CalcStraightLineMinDistances(const TOriginPoints& origin_pts, const TDestinationPoints& dest_pts, float radius, TMinDistArr&& ret_min_dist_per_origin, TDestIndexArr&& ret_dest_idx_per_origin)
 	{
 		const auto radius_sqrd = radius * radius;
 		if (radius < std::numeric_limits<float>::infinity())
@@ -38,9 +38,12 @@ namespace psta
 			auto origin_tree = CPointAABSPTree::Create(origin_pts, origin_tree_order);
 			// Clear results
 			std::fill(ret_min_dist_per_origin.begin(), ret_min_dist_per_origin.end(), std::numeric_limits<float>::infinity());
+			if (ret_dest_idx_per_origin)
+				for (auto& x : ret_dest_idx_per_origin)
+					x = -1;
 			// Find minimum squared distance for each origin
 			std::vector<CAABSPTree::SObjectSet> origin_point_sets;
-			enumerate(dest_pts, [&](size_t dest_idx, const float2& dest_pt)
+			enumerate(dest_pts, [&](auto dest_idx, const float2& dest_pt)
 			{
 				origin_tree.TestSphere(dest_pt, radius, origin_point_sets);
 				for (const auto& point_set : origin_point_sets)
@@ -52,7 +55,11 @@ namespace psta
 						const auto dist_sqrd = (dest_pt - origin_pt).getLengthSqr();
 						auto& result = ret_min_dist_per_origin[origin_idx];
 						if (dist_sqrd <= radius_sqrd)
+						{
 							result = std::min(result, dist_sqrd);
+							if (ret_dest_idx_per_origin)
+								ret_dest_idx_per_origin[origin_idx] = dest_idx;
+						}
 					}
 				}
 			});
@@ -63,11 +70,28 @@ namespace psta
 		else
 		{
 			// Brute force, O(N*M)
-			enumerate(origin_pts, [&](size_t origin_idx, const float2& origin_pt)
+			enumerate(origin_pts, [&](auto origin_idx, const float2& origin_pt)
 			{
 				float min_dist_sqrd = std::numeric_limits<float>::infinity();
-				for (const auto& dest_pt : dest_pts)
-					min_dist_sqrd = std::min(min_dist_sqrd, (origin_pt - dest_pt).getLengthSqr());
+				if (ret_dest_idx_per_origin)
+				{
+					int closest_destination = -1;
+					enumerate(dest_pts, [&](auto dest_idx, const float2& dest_pt)
+					{
+						const auto dist_sqrd = (origin_pt - dest_pt).getLengthSqr();
+						if (dist_sqrd < min_dist_sqrd)
+						{
+							min_dist_sqrd = dist_sqrd;
+							closest_destination = dest_idx;
+						}
+					});
+					ret_dest_idx_per_origin[origin_idx] = closest_destination;
+				}
+				else
+				{
+					for (const auto& dest_pt : dest_pts)
+						min_dist_sqrd = std::min(min_dist_sqrd, (origin_pt - dest_pt).getLengthSqr());
+				}
 				ret_min_dist_per_origin[origin_idx] = sqrt(min_dist_sqrd);
 			});
 		}

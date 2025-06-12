@@ -37,7 +37,13 @@ namespace psta
 	class array_view
 	{
 	public:
+		array_view() : m_Begin(nullptr), m_End(nullptr) {}
+
 		array_view(T* arr, size_t size) : m_Begin(arr), m_End(arr + size) {}
+
+		operator bool() const { return !empty(); }
+
+		bool empty() const { return m_End <= m_Begin; }
 
 		size_t size() const { return m_End - m_Begin; }
 

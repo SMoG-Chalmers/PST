@@ -65,14 +65,15 @@ class SPSTAAttractionDistanceDesc(Structure) :
 		# Outputs
 		# Pointer to array of one element per input object (specified by m_OriginType)
 		("m_OutMinDistances", POINTER(c_float)),
+		("m_OutDestinationIndices", POINTER(c_int)),
 		("m_OutputCount", c_uint),  # For m_OutMinDistances array size verification only
 	]
 	def __init__(self, *args):
 		Structure.__init__(self, *args)
-		self.m_Version = 3
+		self.m_Version = 4
 
 
-def AttractionDistance(graph_handle, origin_type=OriginType.LINES, distance_type=DistanceType.STEPS, radius=Radii(), attraction_points=None, points_per_polygon=None, polygon_point_interval=0, line_weights=None, weight_per_meter_for_point_edges=0, progress_callback = None, out_min_distances=None):
+def AttractionDistance(graph_handle, origin_type=OriginType.LINES, distance_type=DistanceType.STEPS, radius=Radii(), attraction_points=None, points_per_polygon=None, polygon_point_interval=0, line_weights=None, weight_per_meter_for_point_edges=0, progress_callback = None, out_min_distances=None, out_destination_indices=None):
 	desc = SPSTAAttractionDistanceDesc()
 	# Graph
 	desc.m_Graph = graph_handle
@@ -99,6 +100,9 @@ def AttractionDistance(graph_handle, origin_type=OriginType.LINES, distance_type
 	desc.m_ProgressCallbackUser = c_void_p() 
 	# Outputs
 	(desc.m_OutMinDistances, desc.m_OutputCount) = UnpackArray(out_min_distances, 'f')
+	if out_destination_indices is not None:
+		(desc.m_OutDestinationIndices, n) = UnpackArray(out_destination_indices, 'i')
+		assert(n == desc.m_OutputCount)
 	# Make the call
 	fn = _DLL.PSTAAttractionDistance
 	fn.restype = ctypes.c_bool

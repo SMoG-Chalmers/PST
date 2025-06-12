@@ -30,7 +30,7 @@ struct SPSTAAttractionDistanceDesc
 	PSTA_DECL_STRUCT_NAME(SPSTAAttractionDistanceDesc)
 
 	// Version
-	static const unsigned int VERSION = 3;
+	static const unsigned int VERSION = 4;
 	const unsigned int m_Version = VERSION;
 
 	// Graph
@@ -65,10 +65,10 @@ struct SPSTAAttractionDistanceDesc
 	FPSTAProgressCallback m_ProgressCallback = nullptr;
 	void*                 m_ProgressCallbackUser = nullptr;
 
-	// Output
-	// Pointer to array of one element per input object (specified by m_OriginType)
+	// Output arrays (one element per origin, where origin is specified by m_OriginType)
 	float* m_OutMinDistance = nullptr;
-	unsigned int m_OutputCount = 0;  // For m_OutMinDistance array size verification only
+	int*   m_OutDestinationIndices = nullptr;  // -1 if no destination was reachable
+	unsigned int m_OutputCount = 0;  // Element count for output arrays, for verification only
 };
 
 PSTADllExport bool PSTAAttractionDistance(const SPSTAAttractionDistanceDesc* desc);

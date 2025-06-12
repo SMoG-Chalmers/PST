@@ -39,24 +39,24 @@ namespace psta
 	// Atomically compares obj and expected, if bitwise-equal replaces obj 
 	// with desired. Otherwise loads the actual value stored in obj into expected.
 	// TODO: Move
-	template <typename T>
-	bool atomic_compare_exchange(T& obj, T& expected, T desired)
-	{
-		static_assert(sizeof(T) == 4, "atomic_compare_exchange only works with 32-bit values");
+	// template <typename T>
+	// bool atomic_compare_exchange(T& obj, T& expected, T desired)
+	// {
+	// 	static_assert(sizeof(T) == 4, "atomic_compare_exchange only works with 32-bit values");
 
-		#ifdef WIN32
-			const auto prev = _InterlockedCompareExchange((long*)&obj, *(long*)&desired, *(long*)&expected);
-		#else	
-			const auto prev = __sync_val_compare_and_swap((int*)&obj, *(int*)&expected, *(int*)&desired);
-		#endif
+	// 	#ifdef WIN32
+	// 		const auto prev = _InterlockedCompareExchange((long*)&obj, *(long*)&desired, *(long*)&expected);
+	// 	#else	
+	// 		const auto prev = __sync_val_compare_and_swap((int*)&obj, *(int*)&expected, *(int*)&desired);
+	// 	#endif
 
-		if (*(T*)&prev == expected)
-			return true;
+	// 	if (*(T*)&prev == expected)
+	// 		return true;
 
-		expected = *(T*)&prev;
+	// 	expected = *(T*)&prev;
 		
-		return false;
-	}
+	// 	return false;
+	// }
 
 	struct SAttractionDistanceWorkerContext
 	{
@@ -66,13 +66,15 @@ namespace psta
 		const graph_t&     m_Graph;
 		const float* const m_Limits;
 		const float        m_StraightLineDistLimit;
-		float* const       m_Results;
+		float* const       m_ResMinDistPerDest = nullptr;
+		int*   const       m_ResOriginIdxPerDest = nullptr;
 
-		SAttractionDistanceWorkerContext(const graph_t& graph, const float* limits, float straight_line_dist_limit, float* ret_min_distance_per_destination)
+		SAttractionDistanceWorkerContext(const graph_t& graph, const float* limits, float straight_line_dist_limit, float* ret_min_distance_per_destination, int* ret_origin_index_per_destination)
 			: m_Graph(graph)
 			, m_Limits(limits)
 			, m_StraightLineDistLimit(straight_line_dist_limit)
-			, m_Results(ret_min_distance_per_destination)
+			, m_ResMinDistPerDest(ret_min_distance_per_destination)
+			, m_ResOriginIdxPerDest(ret_origin_index_per_destination)
 			, m_NextOrigin(0)
 		{}
 
@@ -88,19 +90,66 @@ namespace psta
 			return ret_index < m_Graph.OriginNodeCount();
 		}
 
+		void UpdateResults(const float* min_dists)
+		{
+			std::unique_lock<decltype(m_Mutex)> _cs(m_Mutex);
+			for (size_t i = 0; i < m_Graph.DestinationCount(); ++i)
+				m_ResMinDistPerDest[i] = std::min(min_dists[i], m_ResMinDistPerDest[i]);
+		}
+
+		void UpdateResults(const std::pair<float, int>* min_dists_and_org_idx)
+		{
+			std::unique_lock<decltype(m_Mutex)> _cs(m_Mutex);
+			for (size_t i = 0; i < m_Graph.DestinationCount(); ++i)
+			{
+				if (min_dists_and_org_idx[i].first < m_ResMinDistPerDest[i])
+				{
+					m_ResMinDistPerDest[i]   = min_dists_and_org_idx[i].first;
+					m_ResOriginIdxPerDest[i] = min_dists_and_org_idx[i].second;
+				}
+				else if (min_dists_and_org_idx[i].first == m_ResMinDistPerDest[i])
+				{
+					// To make sure the analysis is deterministic we choose origin index with lowest index if
+					// minimum distance is the same. Otherwise origin index could change from one execution to the next.
+					m_ResOriginIdxPerDest[i] = std::min(m_ResOriginIdxPerDest[i], min_dists_and_org_idx[i].second);
+				}
+			}
+		}
+
 	private:
 		std::atomic<size_t> m_NextOrigin;
+		std::recursive_mutex m_Mutex;
 	};
 
 	void AttractionDistanceWorker(SAttractionDistanceWorkerContext& ctx)
 	{
-		IShortestPathTraversal::dist_callback_t cb([&](size_t destination_index, float distance)
-		{
-			float expected = -1;  // std::numeric_limits<float>::infinity();
-			while (!atomic_compare_exchange(ctx.m_Results[destination_index], expected, distance) && distance < expected);
-		});
-		auto traversal = CreateShortestPathTraversal(ctx.m_Graph);
 		size_t origin_index;
+		std::vector<float> min_dists;
+		std::vector<std::pair<float, int>> min_dists_and_org_idx;
+		IShortestPathTraversal::dist_callback_t cb;
+
+		if (ctx.m_ResOriginIdxPerDest)
+		{
+			min_dists_and_org_idx = std::vector<std::pair<float, int>>(ctx.m_Graph.DestinationCount(), std::make_pair(std::numeric_limits<float>::infinity(), -1));
+			cb = ([&origin_index, &min_dists_and_org_idx](size_t destination_index, float distance)
+			{
+				if (distance < min_dists_and_org_idx[destination_index].first)
+				{
+					min_dists_and_org_idx[destination_index].first  = distance;
+					min_dists_and_org_idx[destination_index].second = (int)origin_index;
+				}
+			});
+		}
+		else
+		{
+			min_dists = std::vector<float>(ctx.m_Graph.DestinationCount(), std::numeric_limits<float>::infinity());
+			cb = ([&origin_index, &min_dists](size_t destination_index, float distance)
+			{
+				min_dists[destination_index] = std::min(min_dists[destination_index], distance);
+			});
+		}
+
+		auto traversal = CreateShortestPathTraversal(ctx.m_Graph);
 		while (ctx.DequeueOrigin(origin_index))
 		{
 			if (ctx.m_Graph.DistanceTypeCount() == 1)
@@ -108,6 +157,11 @@ namespace psta
 			else
 				traversal->Search(origin_index, cb, ctx.m_Limits, ctx.m_StraightLineDistLimit);
 		}
+
+		if (!min_dists.empty())
+			ctx.UpdateResults(min_dists.data());
+		else
+			ctx.UpdateResults(min_dists_and_org_idx.data());
 	}
 
 	void CalculateMinimumDistances(
@@ -115,16 +169,22 @@ namespace psta
 		IProgressCallback& prograss_callback, 
 		const float* limits, 
 		float straight_line_distance_limit, 
-		float* result_buffer,
-		size_t result_buffer_size)
+		psta::array_view<float> ret_min_dist_per_origin,
+		psta::array_view<int>   ret_dest_idx_per_origin)
 	{
-		if (graph.DestinationCount() != result_buffer_size)
+		if ((ret_min_dist_per_origin.size() != graph.DestinationCount()) ||
+			(ret_dest_idx_per_origin && ret_dest_idx_per_origin.size() != graph.DestinationCount()))
 			throw std::runtime_error("Result buffer size doesn't match destination count");
 
-		for (size_t i = 0; i < graph.DestinationCount(); ++i)
-			result_buffer[i] = -1;
-		
-		SAttractionDistanceWorkerContext ctx(graph, limits, straight_line_distance_limit, result_buffer);
+		if (ret_min_dist_per_origin)
+			for (auto& x : ret_min_dist_per_origin)
+				x = std::numeric_limits<float>::infinity();
+
+		if (ret_dest_idx_per_origin)
+			for (auto& x : ret_dest_idx_per_origin)
+				x = -1;
+
+		SAttractionDistanceWorkerContext ctx(graph, limits, straight_line_distance_limit, ret_min_dist_per_origin.data(), ret_dest_idx_per_origin.data());
 		
 		// Start workers
 		std::vector<std::future<void>> tasks;
@@ -221,10 +281,12 @@ PSTADllExport bool PSTAAttractionDistance(const SPSTAAttractionDistanceDesc* des
 			return false;
 		}
 
-		float* results = desc->m_OutMinDistance;
+		float* results            = desc->m_OutMinDistance;
+		int*   result_indices     = desc->m_OutDestinationIndices;
 		unsigned int result_count = desc->m_OutputCount;
 
 		std::vector<float> point_results;
+		std::vector<int>   point_result_indices;
 		if (EPSTAOriginType_PointGroups == desc->m_OriginType)
 		{
 			if (desc->m_OutputCount != axial_graph->getPointGroupCount())
@@ -234,6 +296,11 @@ PSTADllExport bool PSTAAttractionDistance(const SPSTAAttractionDistanceDesc* des
 			}
 			point_results.resize(axial_graph->getPointCount());
 			results = point_results.data();
+			if (result_indices)
+			{
+				point_result_indices.resize(axial_graph->getPointCount());
+				result_indices = point_result_indices.data();
+			}
 			result_count = (unsigned int)point_results.size();
 		}
 
@@ -242,9 +309,10 @@ PSTADllExport bool PSTAAttractionDistance(const SPSTAAttractionDistanceDesc* des
 		for (size_t i = 0; i < attraction_points.size(); ++i)
 			attraction_points[i] = axial_graph->worldToLocal(((const double2*)desc->m_AttractionPoints)[i]);
 
+		std::vector<float2> poly_points;
 		if (desc->m_PointsPerAttractionPolygon)
 		{
-			const std::vector<float2> poly_points = std::move(attraction_points);
+			poly_points = std::move(attraction_points);
 
 			// Generate and count points
 			size_t count = 0;
@@ -277,8 +345,8 @@ PSTADllExport bool PSTAAttractionDistance(const SPSTAAttractionDistanceDesc* des
 				psta::NetworkElementPositions(*axial_graph, destination_type), 
 				attraction_points,
 				desc->m_Radius.Straight(),
-				psta::make_array_view(results, result_count));
-			std::replace(results, results + result_count, std::numeric_limits<float>::infinity(), -1.f);
+				psta::make_array_view(results, result_count),
+				psta::make_array_view(result_indices, result_indices ? result_count : 0));
 		}
 		else
 		{
@@ -299,7 +367,29 @@ PSTADllExport bool PSTAAttractionDistance(const SPSTAAttractionDistanceDesc* des
 
 			CPSTAlgoProgressCallback progress(desc->m_ProgressCallback, desc->m_ProgressCallbackUser);
 
-			psta::CalculateMinimumDistances(analysis_graph, progress, limits.data(), std::numeric_limits<float>::infinity(), results, result_count);
+			psta::CalculateMinimumDistances(analysis_graph, progress, limits.data(), std::numeric_limits<float>::infinity(), 
+				psta::make_array_view(results, result_count),
+				psta::make_array_view(result_indices, result_indices ? result_count : 0));
+
+			if (desc->m_PointsPerAttractionPolygon && desc->m_OutDestinationIndices)
+			{
+				// Destinations points have been generated along polygon edges. Translate
+				// destination indices from generated point indices to polygon indices.
+				std::vector<unsigned int> point_to_polygon;
+				point_to_polygon.reserve(attraction_points.size());
+				const auto* pts = poly_points.data();
+				for (unsigned int polygon_index = 0; polygon_index < desc->m_AttractionPolygonCount; ++polygon_index)
+				{
+					const auto n = GeneratePointsAlongRegionEdge(pts, desc->m_PointsPerAttractionPolygon[polygon_index], desc->m_AttractionPolygonPointInterval);
+					for (size_t i = 0; i < n; ++i)
+						point_to_polygon.push_back(polygon_index);
+					pts += desc->m_PointsPerAttractionPolygon[polygon_index];
+				}
+				ASSERT(point_to_polygon.size() == attraction_points.size());
+				for (size_t i = 0; i < desc->m_OutputCount; ++i)
+					if (desc->m_OutDestinationIndices[i] >= 0)
+						desc->m_OutDestinationIndices[i] = point_to_polygon[desc->m_OutDestinationIndices[i]];
+			}
 
 			if (EPSTAOriginType_PointGroups == desc->m_OriginType)
 			{
@@ -308,20 +398,28 @@ PSTADllExport bool PSTAAttractionDistance(const SPSTAAttractionDistanceDesc* des
 				unsigned int point_index = 0;
 				for (unsigned int group_index = 0; group_index < axial_graph->getPointGroupCount(); ++group_index)
 				{
-					float min_dist = -1;
+					float min_dist = std::numeric_limits<float>::infinity();
+					int   dest_idx = -1;
 					for (unsigned int i = 0; i < axial_graph->getPointGroupSize(group_index); ++i, ++point_index)
 					{
-						if (results[point_index] < 0)
-							continue;
-						if (min_dist < 0 || results[point_index] < min_dist)
+						if (results[point_index] < min_dist)
+						{
 							min_dist = results[point_index];
+							if (result_indices)
+								dest_idx = result_indices[point_index];
+						}
 					}
 					desc->m_OutMinDistance[group_index] = min_dist;
+					if (desc->m_OutDestinationIndices)
+						desc->m_OutDestinationIndices[group_index] = dest_idx;
 				}
 				ASSERT(point_index == (unsigned int)axial_graph->getPointCount());
 			}
 		}
 
+		// Replace infinity result values with -1
+		if (desc->m_OutMinDistance)
+			std::replace(desc->m_OutMinDistance, desc->m_OutMinDistance + desc->m_OutputCount, std::numeric_limits<float>::infinity(), -1.f);
 	}
 	catch (const std::exception& e)
 	{
