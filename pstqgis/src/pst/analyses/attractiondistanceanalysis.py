@@ -142,9 +142,10 @@ class AttractionDistanceAnalysis(BaseAnalysis):
 				if attr_col is None:
 					attr_points_filtered = attr_points
 					attr_points_per_polygon_filtered = attr_points_per_polygon
+					destination_attributes_filtered = destination_attributes
 				else:
 					attr_values = AttractionValueGen(model, attr_table, attr_rows, [attr_col], progress)
-					(attr_points_temp, attr_points_per_polygon_temp) = FilterZeroAttractions(attr_points, attr_points_per_polygon, attr_values, stack_allocator, attr_points_temp, attr_points_per_polygon_temp)
+					(attr_points_temp, attr_points_per_polygon_temp, destination_attributes_filtered) = FilterZeroAttractions(attr_points, attr_points_per_polygon, attr_values, destination_attributes, stack_allocator, attr_points_temp, attr_points_per_polygon_temp)
 					attr_points_filtered = attr_points_temp
 					attr_points_per_polygon_filtered = attr_points_per_polygon_temp
 				# Distance types
@@ -176,14 +177,14 @@ class AttractionDistanceAnalysis(BaseAnalysis):
 					out_dist_column_name = GenerateColumnName(attr_title, distance_type, radii)
 					columns.append((out_dist_column_name, 'float', scores.values()))
 					if dst_attr_to_org_enabled:
-						assert(destination_indices and destination_attributes)
-						def AttributeGen(destination_indices, destination_attributes):
-							for i in range(destination_indices.size()):
-								dst_idx = destination_indices[i]
-								yield None if dst_idx < 0 else destination_attributes[dst_idx]
+						assert(destination_indices and destination_attributes_filtered)
+						def AttributeGen(indices, attributes):
+							for i in range(indices.size()):
+								dst_idx = indices[i]
+								yield None if dst_idx < 0 else attributes[dst_idx]
 						out_attrib_column_name = "%s_%s" % (out_dist_column_name, props['dst_attr_to_org_out_column_suffix'])
 						attrib_data_type = model.columnType(attr_table, dst_attr_to_org_in_column)
-						columns.append((out_attrib_column_name, attrib_data_type, AttributeGen(destination_indices, destination_attributes)))
+						columns.append((out_attrib_column_name, attrib_data_type, AttributeGen(destination_indices, destination_attributes_filtered)))
 					# Progress
 					analysis_progress.nextTask()
 
@@ -275,7 +276,7 @@ def AttractionValueGen(model, table, rowids, column_names, progress):
 			if (i % 1000) == 0:
 				progress.setProgress(float(i) / row_count)
 
-def FilterZeroAttractions(points, points_per_polygon, attr_values, allocator, points_out=None, points_per_polygon_out=None):
+def FilterZeroAttractions(points, points_per_polygon, attr_values, destination_attributes, allocator, points_out=None, points_per_polygon_out=None):
 	from pstalgo import Vector # Do it here when it is needed instead of on plugin load
 	if points_out is None:
 		points_out = Vector(ctypes.c_double, len(points), allocator)
@@ -284,6 +285,7 @@ def FilterZeroAttractions(points, points_per_polygon, attr_values, allocator, po
 		if points_per_polygon_out is None:
 			points_per_polygon_out = Vector(points_per_polygon.elemtype(), points_per_polygon.size(), allocator)
 		points_per_polygon_out.clear()
+	destination_attributes_out = None if destination_attributes is None else []
 	pcount = 0
 	total_poly_point_count = 0
 	attr_count = 0
@@ -294,10 +296,12 @@ def FilterZeroAttractions(points, points_per_polygon, attr_values, allocator, po
 				points_per_polygon_out.append(count)
 			for ii in range(pcount*2, (pcount+count)*2):
 				points_out.append(points[ii])
+			if destination_attributes_out is not None:
+				destination_attributes_out.append(destination_attributes[i])
 		pcount += count
 		attr_count += 1
 	if points_per_polygon_out is None:
 		assert(len(points) == attr_count*2)
 	else:
 		assert(len(points_per_polygon) == attr_count)
-	return (points_out, points_per_polygon_out)
+	return (points_out, points_per_polygon_out, destination_attributes_out)
