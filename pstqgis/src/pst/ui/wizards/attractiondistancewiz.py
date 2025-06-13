@@ -35,6 +35,7 @@ class AttractionDistanceWiz(BaseWiz):
 			WeightPage(),
 			RadiusPage(),
 			DestinationPage(),
+			DestinationAttributesPage(),
 			ReadyPage(),
 			ProgressPage(),
 			FinishPage(),
@@ -194,3 +195,48 @@ def ValidateNonCollidingAttractionDataOutputColumns(parent, dest_data_enabled, d
 			return False
 		prefixes.append(prefix)
 	return True
+
+
+class DestinationAttributesPage(BasePage):
+	def __init__(self):
+		BasePage.__init__(self)
+		self.setTitle("Destination Attributes")
+		self.setSubTitle(" ")
+		self.createWidgets()
+
+	def createWidgets(self):
+
+		prop_sheet = PropertySheetWidget(self)
+		self._column_combo = prop_sheet.addComboProp("Attribute column (in destinations table)", [], None, "dst_attr_to_org_in_column")[1]
+		prop_sheet.addTextProp("Output column suffix (in origins table)", "", "dst_attr_to_org_out_column_suffix")
+
+		enable_checkbox = WidgetEnableCheckBox("Copy destination attributes to origins", [prop_sheet])
+		self.regProp("dst_attr_to_org_enabled", WizProp(enable_checkbox, False))
+
+		vlayout = QVBoxLayout()
+		vlayout.setSpacing(10)
+		vlayout.addWidget(enable_checkbox)
+		vlayout.addWidget(prop_sheet)
+
+		self.setLayout(vlayout)
+
+	def initializePage(self):
+		dest_table_name = self.wizard().prop("in_destinations")
+		column_names = self.model().columnNames(dest_table_name)
+		self._column_combo.clear()
+		for name in column_names:
+			self._column_combo.addItem(name, name)
+
+	def validatePage(self):
+		if self.wizard().prop("dst_attr_to_org_enabled"):
+			if not self.wizard().prop("dst_attr_to_org_out_column_suffix"):
+				QMessageBox.information(self, "Incomplete input", "Please type in a valid output column suffix.")
+				return False
+		return True
+	"""
+	def nextId(self):
+		if self.wizard().prop("dst_attr_to_org_enabled"):
+			self.wizard().setProp('dest_data_enabled', False)  # Disable destination data
+			return self.wizard().currentId() + 2  # Skip next page (destination data page)
+		return BasePage.nextId(self)
+	"""

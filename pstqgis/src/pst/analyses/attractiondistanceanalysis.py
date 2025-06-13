@@ -55,6 +55,10 @@ class AttractionDistanceAnalysis(BaseAnalysis):
 		# Attraction columns (None = use value 1 for every attraction)
 		attraction_columns = props['dest_data'] if props['dest_data_enabled'] else [None]
 
+		# Option for ocpying attributes from destinations to origins
+		dst_attr_to_org_enabled = props['dst_attr_to_org_enabled']
+		dst_attr_to_org_in_column = props['dst_attr_to_org_in_column']
+
 		# Number of analyses
 		analysis_count = len(attraction_columns) * len(distance_types)
 
@@ -111,6 +115,11 @@ class AttractionDistanceAnalysis(BaseAnalysis):
 			else:
 				assert(False)
 
+			# Array for closest destination index for each origin
+			destination_attributes = None
+			if dst_attr_to_org_enabled:
+				destination_attributes = [a for a in model.values(attr_table, dst_attr_to_org_in_column, attr_rows)]
+
 			columns = []
 
 			attr_points_temp = None
@@ -140,8 +149,9 @@ class AttractionDistanceAnalysis(BaseAnalysis):
 					attr_points_per_polygon_filtered = attr_points_per_polygon_temp
 				# Distance types
 				for distance_type in distance_types:
-					# Allocate output array
+					# Allocate output arrays
 					scores = Vector(ctypes.c_float, output_count, stack_allocator, output_count)
+					destination_indices = Vector(ctypes.c_int, output_count, stack_allocator, output_count) if dst_attr_to_org_enabled else None
 					# Analysis
 					if distance_type == pstalgo.DistanceType.WEIGHTS:
 						line_weights = weight_values
@@ -159,10 +169,21 @@ class AttractionDistanceAnalysis(BaseAnalysis):
 							line_weights=line_weights,
 							weight_per_meter_for_point_edges=point_connection_weight,
 							progress_callback = pstalgo.CreateAnalysisDelegateCallbackWrapper(analysis_progress),
-							out_min_distances = scores)
-					# Output column
+							out_min_distances = scores,
+							out_destination_indices = destination_indices)
+					# Output columns
 					attr_title = GenerateAttractionDataName(props['in_destinations'], attr_col, props['dest_name'])
-					columns.append((GenerateColumnName(attr_title, distance_type, radii), 'float', scores.values()))
+					out_dist_column_name = GenerateColumnName(attr_title, distance_type, radii)
+					columns.append((out_dist_column_name, 'float', scores.values()))
+					if dst_attr_to_org_enabled:
+						assert(destination_indices and destination_attributes)
+						def AttributeGen(destination_indices, destination_attributes):
+							for i in range(destination_indices.size()):
+								dst_idx = destination_indices[i]
+								yield None if dst_idx < 0 else destination_attributes[dst_idx]
+						out_attrib_column_name = "%s_%s" % (out_dist_column_name, props['dst_attr_to_org_out_column_suffix'])
+						attrib_data_type = model.columnType(attr_table, dst_attr_to_org_in_column)
+						columns.append((out_attrib_column_name, attrib_data_type, AttributeGen(destination_indices, destination_attributes)))
 					# Progress
 					analysis_progress.nextTask()
 
