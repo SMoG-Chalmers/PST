@@ -114,6 +114,10 @@ public:
 	const CPointAABSPTree& operator=(const CPointAABSPTree&) = delete;
 	const CPointAABSPTree& operator=(CPointAABSPTree&& other) { CAABSPTree::operator=(std::move(other)); return *this; }
 
+	// NOTE: On return each element in 'ret_order' will contain the index that the corresponding point was given in the generated tree.
+	//       In other words - this array can be used to look up bsp element index from original point index - not vice versa! The rationale
+	//       here is that it is assumed that the caller likely will use this array to reorder the original point object to match the
+	//       ordering of the bsp elements, so that elements for a particular node will be laid out closely in memory (for cache coherency).
 	template <class TPointCollection, class TOrderCollection>
 	inline static CPointAABSPTree Create(const TPointCollection& points, TOrderCollection& ret_order, unsigned int max_points_per_cell = 16);
 

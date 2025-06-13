@@ -34,8 +34,16 @@ namespace psta
 		if (radius < std::numeric_limits<float>::infinity())
 		{
 			// Create origin point tree
-			std::vector<unsigned int> origin_tree_order(ret_min_dist_per_origin.size());
-			auto origin_tree = CPointAABSPTree::Create(origin_pts, origin_tree_order);
+			std::vector<unsigned int> origin_lookup(ret_min_dist_per_origin.size());
+			auto origin_tree = CPointAABSPTree::Create(origin_pts, origin_lookup);
+			// Invert origin_lookup so that it can be used to look up
+			// origin index for a given element index from bsp tree.
+			{
+				std::vector<unsigned int> tmp(origin_lookup.size());
+				for (size_t i = 0; i < origin_lookup.size(); ++i)
+					tmp[origin_lookup[i]] = (unsigned int)i;
+				std::swap(origin_lookup, tmp);
+			}
 			// Clear results
 			std::fill(ret_min_dist_per_origin.begin(), ret_min_dist_per_origin.end(), std::numeric_limits<float>::infinity());
 			if (ret_dest_idx_per_origin)
@@ -50,7 +58,7 @@ namespace psta
 				{
 					for (size_t pt_idx = 0; pt_idx < point_set.m_Count; ++pt_idx)
 					{
-						const auto origin_idx = origin_tree_order[point_set.m_FirstObject + pt_idx];
+						const auto origin_idx = origin_lookup[point_set.m_FirstObject + pt_idx];
 						const auto& origin_pt = origin_pts[origin_idx];
 						const auto dist_sqrd = (dest_pt - origin_pt).getLengthSqr();
 						auto& result = ret_min_dist_per_origin[origin_idx];

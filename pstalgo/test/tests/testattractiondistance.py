@@ -98,6 +98,25 @@ class TestAttractionDistance(unittest.TestCase):
 		self.doTest(g, OriginType.POINTS, DistanceType.STRAIGHT, Radii(), attraction_points, min_dists_check=[0.5]*10, dest_idx_check=[1,11,21,31,41,51,61,71,81,91])
 		pstalgo.FreeGraph(g)
 
+	def test_adi_straight_grid(self):
+		origin_coords = CreatePointGrid(10,10)
+		line_coords = [0, 0, 1, 0]
+		g = CreateGraph(origin_coords, line_coords)
+		attraction_coords = [-1.5, 0]
+		attraction_arr = array.array('d', attraction_coords)
+		min_dists_check = [-1]*int(len(origin_coords)/2)
+		dest_idx_check = [-1]*int(len(origin_coords)/2)
+		straight_radius = 2.1
+		for i in range(len(min_dists_check)):
+			dx = attraction_coords[0] - origin_coords[i*2]
+			dy = attraction_coords[1] - origin_coords[i*2+1]
+			d = math.sqrt(dx*dx+dy*dy)
+			if d <= straight_radius:
+				min_dists_check[i] = d;
+				dest_idx_check[i] = 0
+		self.doTest(g, OriginType.POINTS, DistanceType.STRAIGHT, Radii(straight=straight_radius), attraction_arr, min_dists_check=min_dists_check, dest_idx_check=dest_idx_check)
+		pstalgo.FreeGraph(g)
+
 	def doTest(self, graph, origin_type, distance_type, radius, attraction_points, min_dists_check=None, dest_idx_check=None, points_per_polygon=None, polygon_point_interval=0, line_weights=None, weight_per_meter_for_point_edges=0):
 		min_dists = array.array('f', [0])*len(min_dists_check)
 		dest_indices = array.array('i', [0])*len(dest_idx_check) if dest_idx_check is not None else None
@@ -169,3 +188,21 @@ def CreateWaveGraph():
 	points = array.array('d', points)
 	graph_handle = pstalgo.CreateGraph(line_coords, line_indices, None, points, None)
 	return graph_handle
+
+def CreatePointGrid(res_x, res_y):
+	""" Create grid of points centered around (0,0) """
+	pts = [0] * (res_x*res_y*2)
+	for y in range(res_y):
+		for x in range(res_x):
+			pts[((y*res_x)+x) * 2]     = x - (res_x - 1) * 0.5
+			pts[((y*res_x)+x) * 2 + 1] = y - (res_y - 1) * 0.5
+	return pts;
+
+def CreateGraph(point_coords, line_coords):
+	line_indices = [0]*int(len(line_coords)/2)
+	for i in range(len(line_indices)):
+		line_indices[i] = i
+	line_coords_arr  = array.array('d', line_coords)
+	line_indices_arr = array.array('I', line_indices)
+	points_arr       = array.array('d', point_coords)
+	return pstalgo.CreateGraph(line_coords_arr, line_indices_arr, None, points_arr, None)
