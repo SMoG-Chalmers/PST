@@ -23,7 +23,7 @@ from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QIntValidator, QFontMetrics
 from qgis.PyQt.QtWidgets import QComboBox, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QCheckBox, QRadioButton, QButtonGroup
 from qgis.core import QgsProject, QgsVectorLayer, QgsWkbTypes
-from ..wizard import BaseWiz, BasePage, WizProp, WizPropFloat
+from ..wizard import BaseWiz, BasePage, WizProp, WizPropFloat, WizPropRadio
 from ..pages import ReadyPage, ProgressPage, FinishPage
 from ..widgets import WidgetEnableRadioButton
 
@@ -116,6 +116,56 @@ class InputPage(BasePage):
 
 		# vlayout.addSpacing(SEPARATOR_HEIGHT)
 
+		# --- Frame 3: Include in comparison ---
+		vlayout.addWidget(QLabel("Include in comparison:"))
+
+		hlayout = QHBoxLayout()
+		hlayout.addSpacing(INDENT_WIDTH)
+		self._allLinesRadio = QRadioButton("All lines")
+		hlayout.addWidget(self._allLinesRadio)
+		hlayout.addStretch()
+		vlayout.addLayout(hlayout)
+
+		hlayout = QHBoxLayout()
+		hlayout.addSpacing(INDENT_WIDTH)
+		self._identicalGeomRadio = QRadioButton("Only identical lines (matching geometry)")
+		hlayout.addWidget(self._identicalGeomRadio)
+		hlayout.addStretch()
+		vlayout.addLayout(hlayout)
+
+		idComboA = QComboBox()
+		idComboA.setMinimumWidth(100)
+		idComboB = QComboBox()
+		idComboB.setMinimumWidth(100)
+		idLabel = QLabel("ID column:")
+		self._identicalIdRadio = WidgetEnableRadioButton(
+			"Only identical lines (matching ID)", [idLabel, idComboA, idComboB])
+
+		hlayout = QHBoxLayout()
+		hlayout.addSpacing(INDENT_WIDTH)
+		hlayout.addWidget(self._identicalIdRadio)
+		hlayout.addStretch()
+		vlayout.addLayout(hlayout)
+
+		hlayout = QHBoxLayout()
+		hlayout.addSpacing(INDENT_WIDTH * 2)
+		hlayout.addWidget(idLabel)
+		hlayout.addWidget(idComboA)
+		hlayout.addWidget(idComboB)
+		hlayout.addStretch()
+		vlayout.addLayout(hlayout)
+
+		self._idColumnCombos = [idComboA, idComboB]
+		self.regProp("id_column1", WizProp(idComboA, ""))
+		self.regProp("id_column2", WizProp(idComboB, ""))
+		self.regProp("filter_mode", WizPropRadio([
+			(self._allLinesRadio, "all"),
+			(self._identicalGeomRadio, "geom"),
+			(self._identicalIdRadio, "id"),
+		], "all"))
+
+		vlayout.addSpacing(SEPARATOR_HEIGHT)
+
 		hlayout = QHBoxLayout()
 		hlayout.addWidget(QLabel("Pixel size:"))
 		edit = QLineEdit()
@@ -173,6 +223,7 @@ class InputPage(BasePage):
 
 	def _onTableSelected(self, resultIndex, layerIndex):
 		InputPage.updateColumnCombo(self._columnCombos[resultIndex], self._lineLayers[layerIndex])
+		InputPage.updateColumnCombo(self._idColumnCombos[resultIndex], self._lineLayers[layerIndex])
 
 
 class OutputPage(BasePage):

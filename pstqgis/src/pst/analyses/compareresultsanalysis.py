@@ -23,8 +23,8 @@ from qgis.core import QgsProject, QgsRasterShader, QgsColorRampShader, QgsSingle
 from qgis.PyQt.QtGui import QColor
 
 from builtins import object, range
-import ctypes, math
-from .base import BaseAnalysis
+import array, ctypes, math
+from .base import BaseAnalysis, AnalysisException
 from .memory import stack_allocator
 from .utils import MultiTaskProgressDelegate, CreateRasterFromPstaHandle
 from ..utils import tupleFromHtmlColor
@@ -34,6 +34,10 @@ COLORS = ['#5149f6cc', '#69b7f7cc', '#d0f1e2cc', '#f8feeacc', '#f9f8d6cc', '#f2e
 RANGES = [0.01, 0.10, 0.25, 0.5, 1.0]
 RANGE_TEXTS = ["%.2f - %.2f (-)" % (RANGES[-i-2], RANGES[-i-1]) for i in range(len(RANGES) - 1)]
 RANGE_TEXTS += ["%.2f - %.2f (+)" % (RANGES[i], RANGES[i+1]) for i in range(len(RANGES) - 1)]
+
+# Tolerance for matching "identical" line geometry between two networks.
+# Coordinate drift between QGIS exports is typically < 5 cm; 10 cm is generous.
+IDENTICAL_LINE_TOLERANCE_M = 0.1
 
 
 def SetGradientRasterShader(layer, valueRange):
@@ -117,6 +121,7 @@ class CompareResultsAnalysis(BaseAnalysis):
 
 			line_arrays = []
 			value_arrays = []
+			rowids_per_table = []  # for ID-based filtering
 
 			# --- Read input
 			task_index = Tasks.READ1
@@ -132,15 +137,23 @@ class CompareResultsAnalysis(BaseAnalysis):
 					rowids = Vector(ctypes.c_longlong, max_line_count, stack_allocator)
 					model.readLines(table_name, lines, rowids, progress)
 					line_arrays.append(lines)
+					rowids_per_table.append(rowids)
 					#QgsMessageLog.logMessage('%s: %d' % (table_name, lines.size()), 'PST', Qgis.Info)
 				else:
 					line_arrays.append(None)
+					rowids_per_table.append(rowids_per_table[0])
 
 				progress.setCurrentTask(task_index)
 				task_index += 1
 				values = Vector(ctypes.c_float, max_line_count, stack_allocator)
 				self._model.readValues(table_name, column_name, rowids, values)
 				value_arrays.append(values)
+
+			# --- Apply 'identical lines' filter (Frame 3) ---
+			filter_mode = props.get('filter_mode', 'all')
+			if filter_mode != 'all' and separateTables:
+				line_arrays, value_arrays = self._applyIdenticalFilter(
+					filter_mode, props, line_arrays, value_arrays, rowids_per_table)
 
 			pixelSize = max(1, int(props['pixel_size']))
 			blurRadius = max(1, int(props['blur_extent'])) if props['custom_blur_extent'] else pixelSize * 7
@@ -233,4 +246,89 @@ class CompareResultsAnalysis(BaseAnalysis):
 			if result1 is not None:
 				pstalgo.Free(result1)
 			if result2 is not None:
-				pstalgo.Free(result2)			
+				pstalgo.Free(result2)
+
+	def _applyIdenticalFilter(self, mode, props, line_arrays, value_arrays, rowids_per_table):
+		""" Filter line and value arrays so that only lines considered 'identical' between
+		    the two tables are kept. Returns (new_line_arrays, new_value_arrays). """
+		if mode == 'geom':
+			keep0, keep1 = self._matchByGeometry(line_arrays[0], line_arrays[1])
+			mode_label = "geometry matching (tolerance %.2f m)" % IDENTICAL_LINE_TOLERANCE_M
+		elif mode == 'id':
+			keep0, keep1 = self._matchById(props, rowids_per_table)
+			mode_label = "ID matching"
+		else:
+			return line_arrays, value_arrays
+
+		if not keep0 or not keep1:
+			raise AnalysisException(
+				"No identical lines found between '%s' and '%s' using %s. "
+				"Try a different matching mode, or use 'All lines'." % (
+					props['in_table1'], props['in_table2'], mode_label))
+
+		new_line_arrays = []
+		new_value_arrays = []
+		for keep_indices, line_vec, value_vec in [
+			(keep0, line_arrays[0], value_arrays[0]),
+			(keep1, line_arrays[1], value_arrays[1]),
+		]:
+			coords = array.array('d')
+			vals = array.array('f')
+			for idx in keep_indices:
+				coords.append(line_vec[idx*4])
+				coords.append(line_vec[idx*4+1])
+				coords.append(line_vec[idx*4+2])
+				coords.append(line_vec[idx*4+3])
+				vals.append(value_vec[idx])
+			new_line_arrays.append(coords)
+			new_value_arrays.append(vals)
+		return new_line_arrays, new_value_arrays
+
+	@staticmethod
+	def _canonKey(x0, y0, x1, y1):
+		""" Canonical key for a line segment: endpoints snapped to tolerance grid,
+		    sorted so the key is direction-independent. """
+		tol = IDENTICAL_LINE_TOLERANCE_M
+		a = (round(x0 / tol) * tol, round(y0 / tol) * tol)
+		b = (round(x1 / tol) * tol, round(y1 / tol) * tol)
+		return (a, b) if a <= b else (b, a)
+
+	def _matchByGeometry(self, lines0, lines1):
+		""" Return (keep_indices0, keep_indices1) — indices of lines whose endpoint
+		    geometry matches in the other table (within tolerance, direction-independent). """
+		n0 = len(lines0) // 4
+		n1 = len(lines1) // 4
+		keys0 = {}
+		for i in range(n0):
+			k = CompareResultsAnalysis._canonKey(
+				lines0[i*4], lines0[i*4+1], lines0[i*4+2], lines0[i*4+3])
+			# If duplicate keys exist within the same table, keep the first seen
+			if k not in keys0:
+				keys0[k] = i
+		keys1 = {}
+		for i in range(n1):
+			k = CompareResultsAnalysis._canonKey(
+				lines1[i*4], lines1[i*4+1], lines1[i*4+2], lines1[i*4+3])
+			if k not in keys1:
+				keys1[k] = i
+		common = keys0.keys() & keys1.keys()
+		keep0 = sorted(keys0[k] for k in common)
+		keep1 = sorted(keys1[k] for k in common)
+		return keep0, keep1
+
+	def _matchById(self, props, rowids_per_table):
+		""" Return (keep_indices0, keep_indices1) — indices of lines whose ID field
+		    value appears in both tables. """
+		table0 = props['in_table1']
+		table1 = props['in_table2']
+		id_col0 = props.get('id_column1', '')
+		id_col1 = props.get('id_column2', '')
+		if not id_col0 or not id_col1:
+			raise AnalysisException(
+				"ID matching requires an ID column to be selected for both tables.")
+		ids0 = list(self._model.values(table0, id_col0, rowids_per_table[0]))
+		ids1 = list(self._model.values(table1, id_col1, rowids_per_table[1]))
+		common = set(ids0) & set(ids1)
+		keep0 = [i for i, v in enumerate(ids0) if v in common]
+		keep1 = [i for i, v in enumerate(ids1) if v in common]
+		return keep0, keep1
