@@ -47,7 +47,7 @@ class InputPage(BasePage):
 		BasePage.__init__(self)
 		self.setTitle("Calculation Settings")
 		self.setSubTitle(" ")
-		self._lineLayers = [layer for layer in QgsProject.instance().mapLayers().values() if type(layer) == QgsVectorLayer and layer.geometryType() == QgsWkbTypes.LineGeometry]
+		self._lineLayers = [layer for layer in QgsProject.instance().mapLayers().values() if type(layer) == QgsVectorLayer and layer.geometryType() in (QgsWkbTypes.PointGeometry, QgsWkbTypes.LineGeometry, QgsWkbTypes.PolygonGeometry)]
 		self._tableCombos = []
 		self._columnCombos = []
 		self.createWidgets()

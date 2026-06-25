@@ -247,6 +247,19 @@ class QGISModel(object):
 				for feature in layer.getFeatures(request):
 					yield tuple(feature[field_index] for field_index in field_indices)
 
+	def readObjects(self, table_name, value_column, id_column=None):
+		""" Yields (geometry, value, id_value) for each feature with a non-empty geometry.
+		    'geometry' is a cloned QgsGeometry (safe to keep after iteration). 'id_value'
+		    is None when id_column is not given. Works for point, line and polygon layers. """
+		layer = self._layerFromName(table_name)
+		value_index = self._safeFieldIndex(layer, value_column)
+		id_index = self._safeFieldIndex(layer, id_column) if id_column else None
+		for feature in layer.getFeatures():
+			g = feature.geometry()
+			if g is None or g.isEmpty():
+				continue
+			yield (QgsGeometry(g), feature[value_index], feature[id_index] if id_index is not None else None)
+
 	def readValues(self, table_name, column_name, rowids, out_values, progress=None):
 		num_rows = rowids.size()
 		for i,v in enumerate(self.values(table_name, column_name, rowids)):
