@@ -89,6 +89,30 @@ class InputPage(BasePage):
 
 		vlayout.addSpacing(SEPARATOR_HEIGHT)
 
+		# --- Frame 2: Comparison method ---
+		vlayout.addWidget(QLabel("Comparison method:"))
+
+		hlayout = QHBoxLayout()
+		hlayout.addSpacing(INDENT_WIDTH)
+		self._areaMethodRadio = QRadioButton("Area comparison (raster)")
+		hlayout.addWidget(self._areaMethodRadio)
+		hlayout.addStretch()
+		vlayout.addLayout(hlayout)
+
+		hlayout = QHBoxLayout()
+		hlayout.addSpacing(INDENT_WIDTH)
+		self._objectMethodRadio = QRadioButton("Object comparison (vector)")
+		hlayout.addWidget(self._objectMethodRadio)
+		hlayout.addStretch()
+		vlayout.addLayout(hlayout)
+
+		self.regProp("comparison_method", WizPropRadio([
+			(self._areaMethodRadio, "area"),
+			(self._objectMethodRadio, "object"),
+		], "area"))
+
+		vlayout.addSpacing(SEPARATOR_HEIGHT)
+
 		# vlayout.addWidget(QLabel("Calculate difference as:"))
 		# button_group = QButtonGroup(self)
 		
@@ -240,6 +264,7 @@ class OutputPage(BasePage):
 	
 		vlayout.addWidget(QLabel("Output type:"))
 		check_boxes = [
+			("Object (vector) layer", "object_layer"),
 			("Ranges polygon layer",  "ranges_polygons"),
 			#("Ranges raster layer",   "ranges_raster"),
 			("Gradient raster layer", "gradient_raster"),
