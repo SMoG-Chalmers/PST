@@ -260,6 +260,8 @@ class InputPage(BasePage):
 				tableCombo.addItem(layer.name())
 
 	def _onTableSelected(self, resultIndex, layerIndex):
+		if layerIndex < 0 or layerIndex >= len(self._lineLayers):
+			return
 		InputPage.updateColumnCombo(self._columnCombos[resultIndex], self._lineLayers[layerIndex])
 		InputPage.updateColumnCombo(self._idColumnCombos[resultIndex], self._lineLayers[layerIndex])
 
