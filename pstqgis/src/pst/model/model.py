@@ -153,6 +153,19 @@ class QGISModel(object):
 		layer.setRenderer(self._createCategoryRenderer(symbol_props, column, ranges, layer.geometryType()))
 		self._refreshLayer(layer)
 
+	def makeGraduated(self, table, column, ranges):
+		""" Apply a graduated renderer on 'column'. 'ranges' is a list of
+		    (lower_value, upper_value, rgba_tuple, label). """
+		layer = self._layerFromName(table)
+		geometryType = layer.geometryType()
+		range_objs = []
+		for lower, upper, rgba, label in ranges:
+			symbol = QgsSymbol.defaultSymbol(geometryType)
+			symbol.setColor(QColor(*rgba))
+			range_objs.append(QgsRendererRange(lower, upper, symbol, label))
+		layer.setRenderer(QgsGraduatedSymbolRenderer(column, range_objs))
+		self._refreshLayer(layer)
+
 	def _createCategoryRenderer(self, symbol_props, column, ranges, geometryType):
 		categories = []
 		for r in ranges:

@@ -348,7 +348,7 @@ class CompareResultsAnalysis(BaseAnalysis):
 
 		progress.setCurrentTask(Tasks.WRITE)
 		columns = [('id', 'integer', id_gen()), ('diff', 'float', diff_gen())]
-		self._model.createTable(
+		tableId = self._model.createTable(
 			'Object Comparison',
 			self._model.coordinateReferenceSystem(table1),
 			columns,
@@ -356,6 +356,22 @@ class CompareResultsAnalysis(BaseAnalysis):
 			len(features),
 			progress,
 			geo_type=geomType)
+
+		# Styling: graduated red/blue with mirrored class breaks around zero.
+		# Boundaries are the RANGES fractions scaled by the largest absolute diff, so
+		# +X and -X get equally strong colour. The innermost +/- 0.01 band is left
+		# unclassified (no change), matching the raster/polygon output.
+		maxAbs = max((abs(d) for _, d in features), default=0.0)
+		if maxAbs > 0:
+			norm_ranges = [(-RANGES[-i-1], -RANGES[-i-2]) for i in range(len(RANGES) - 1)]
+			norm_ranges += [(RANGES[i], RANGES[i+1]) for i in range(len(RANGES) - 1)]
+			obj_ranges = []
+			last = len(norm_ranges) - 1
+			for i, (lo, hi) in enumerate(norm_ranges):
+				lower = -1e30 if i == 0 else lo * maxAbs
+				upper = 1e30 if i == last else hi * maxAbs
+				obj_ranges.append((lower, upper, tupleFromHtmlColor(COLORS[i]), RANGE_TEXTS[i]))
+			self._model.makeGraduated(tableId, 'diff', obj_ranges)
 
 	def _applyIdenticalFilter(self, mode, props, line_arrays, value_arrays, rowids_per_table):
 		""" Filter line and value arrays so that only lines considered 'identical' between

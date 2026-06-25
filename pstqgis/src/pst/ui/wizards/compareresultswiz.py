@@ -285,14 +285,21 @@ class OutputPage(BasePage):
 			#("Ranges raster layer",   "ranges_raster"),
 			("Gradient raster layer", "gradient_raster"),
 		]
+		self._outputChecks = {}
 		for title,var_name in check_boxes:
 			checkBox = QCheckBox(title)
 			self.regProp(var_name, WizProp(checkBox, True))
 			vlayout.addWidget(checkBox)
+			self._outputChecks[var_name] = checkBox
 
 		vlayout.addStretch()
 
 		self.setLayout(vlayout)
 
 	def initializePage(self):
-		pass
+		# Enable only the outputs relevant to the chosen comparison method:
+		# object -> the object (vector) layer; area -> the raster/polygon layers.
+		is_object = (self.wizard().prop('comparison_method') == 'object')
+		self._outputChecks['object_layer'].setEnabled(is_object)
+		self._outputChecks['ranges_polygons'].setEnabled(not is_object)
+		self._outputChecks['gradient_raster'].setEnabled(not is_object)
