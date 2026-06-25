@@ -4,3 +4,5 @@
 **/.vs/
 *.vcxproj.user
 *.sln
+_built/
+_dist/
