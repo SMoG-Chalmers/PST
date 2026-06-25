@@ -106,6 +106,10 @@ class InputPage(BasePage):
 		hlayout.addStretch()
 		vlayout.addLayout(hlayout)
 
+		method_group = QButtonGroup(self)
+		method_group.addButton(self._areaMethodRadio)
+		method_group.addButton(self._objectMethodRadio)
+
 		self.regProp("comparison_method", WizPropRadio([
 			(self._areaMethodRadio, "area"),
 			(self._objectMethodRadio, "object"),
@@ -180,6 +184,12 @@ class InputPage(BasePage):
 		vlayout.addLayout(hlayout)
 
 		self._idColumnCombos = [idComboA, idComboB]
+
+		filter_group = QButtonGroup(self)
+		filter_group.addButton(self._allLinesRadio)
+		filter_group.addButton(self._identicalGeomRadio)
+		filter_group.addButton(self._identicalIdRadio)
+
 		self.regProp("id_column1", WizProp(idComboA, ""))
 		self.regProp("id_column2", WizProp(idComboB, ""))
 		self.regProp("filter_mode", WizPropRadio([
@@ -228,6 +238,10 @@ class InputPage(BasePage):
 		hlayout.addWidget(label)
 		hlayout.addStretch()
 		vlayout.addLayout(hlayout)
+
+		blur_group = QButtonGroup(self)
+		blur_group.addButton(radio1)
+		blur_group.addButton(radio2)
 
 		vlayout.addStretch()
 
