@@ -149,6 +149,12 @@ class CompareResultsAnalysis(BaseAnalysis):
 				self._model.readValues(table_name, column_name, rowids, values)
 				value_arrays.append(values)
 
+			# --- Object comparison (vector) path (Frame 2) ---
+			if props.get('comparison_method', 'area') == 'object':
+				progress.setCurrentTask(Tasks.WRITE)
+				self._runObjectComparison(props, line_arrays, value_arrays, rowids_per_table, progress)
+				return
+
 			# --- Apply 'identical lines' filter (Frame 3) ---
 			filter_mode = props.get('filter_mode', 'all')
 			if filter_mode != 'all' and separateTables:
@@ -247,6 +253,96 @@ class CompareResultsAnalysis(BaseAnalysis):
 				pstalgo.Free(result1)
 			if result2 is not None:
 				pstalgo.Free(result2)
+
+	def _runObjectComparison(self, props, line_arrays, value_arrays, rowids_per_table, progress):
+		""" Object (vector) comparison for line geometry. Matches objects between the two
+		    tables, computes per-object diff (B - A), and writes a vector layer of the
+		    original geometry with a 'diff' attribute.
+
+		    filter_mode:
+		      'geom' / 'id' : only objects present in both tables (intersection)
+		      'all'         : union of all objects, with the missing side treated as 0
+		                      (correspondence by geometry) """
+		filter_mode = props.get('filter_mode', 'all')
+
+		lines0 = line_arrays[0]
+		lines1 = line_arrays[1] if line_arrays[1] is not None else line_arrays[0]
+		vals0 = value_arrays[0]
+		vals1 = value_arrays[1]
+		n0 = len(lines0) // 4
+		n1 = len(lines1) // 4
+
+		# Build a matching key per object
+		if filter_mode == 'id':
+			id_col0 = props.get('id_column1', '')
+			id_col1 = props.get('id_column2', '')
+			if not id_col0 or not id_col1:
+				raise AnalysisException(
+					"ID matching requires an ID column to be selected for both tables.")
+			keys0 = list(self._model.values(props['in_table1'], id_col0, rowids_per_table[0]))
+			keys1 = list(self._model.values(props['in_table2'], id_col1, rowids_per_table[1]))
+		else:
+			keys0 = [self._canonKey(lines0[i*4], lines0[i*4+1], lines0[i*4+2], lines0[i*4+3]) for i in range(n0)]
+			keys1 = [self._canonKey(lines1[i*4], lines1[i*4+1], lines1[i*4+2], lines1[i*4+3]) for i in range(n1)]
+
+		# Map key -> (index, value); first occurrence wins on duplicate keys
+		mapA = {}
+		for i, k in enumerate(keys0):
+			if k not in mapA:
+				mapA[k] = (i, vals0[i])
+		mapB = {}
+		for i, k in enumerate(keys1):
+			if k not in mapB:
+				mapB[k] = (i, vals1[i])
+
+		def line_geom(lines, idx):
+			return QgsGeometry.fromPolylineXY([
+				QgsPointXY(lines[idx*4],   lines[idx*4+1]),
+				QgsPointXY(lines[idx*4+2], lines[idx*4+3])])
+
+		# Build the list of (geometry, diff) features
+		features = []
+		if filter_mode == 'all':
+			for k in set(mapA.keys()) | set(mapB.keys()):
+				a = mapA.get(k)
+				b = mapB.get(k)
+				va = a[1] if a is not None else 0.0
+				vb = b[1] if b is not None else 0.0
+				geom = line_geom(lines1, b[0]) if b is not None else line_geom(lines0, a[0])
+				features.append((geom, vb - va))
+		else:
+			for k in set(mapA.keys()) & set(mapB.keys()):
+				a = mapA[k]
+				b = mapB[k]
+				features.append((line_geom(lines1, b[0]), b[1] - a[1]))
+
+		if not features:
+			raise AnalysisException(
+				"No objects to compare between '%s' and '%s'. "
+				"Try a different matching mode." % (props['in_table1'], props['in_table2']))
+
+		# Write the vector layer
+		def id_gen():
+			for i in range(len(features)):
+				yield i + 1
+
+		def diff_gen():
+			for _, d in features:
+				yield d
+
+		def geom_gen():
+			for g, _ in features:
+				yield g
+
+		columns = [('id', 'integer', id_gen()), ('diff', 'float', diff_gen())]
+		self._model.createTable(
+			'Object Comparison',
+			self._model.coordinateReferenceSystem(props['in_table1']),
+			columns,
+			geom_gen(),
+			len(features),
+			progress,
+			geo_type=GeometryType.LINE)
 
 	def _applyIdenticalFilter(self, mode, props, line_arrays, value_arrays, rowids_per_table):
 		""" Filter line and value arrays so that only lines considered 'identical' between
