@@ -161,6 +161,19 @@ class InputPage(BasePage):
 		hlayout.addStretch()
 		vlayout.addLayout(hlayout)
 
+		hlayout = QHBoxLayout()
+		hlayout.addSpacing(INDENT_WIDTH * 2)
+		hlayout.addWidget(QLabel("Matching tolerance:"))
+		edit = QLineEdit()
+		edit.setAlignment(Qt.AlignmentFlag.AlignRight)
+		edit.setValidator(QDoubleValidator(0.0, 999999.0, 2, self))
+		edit.setFixedWidth(QFontMetrics(edit.font()).horizontalAdvance('0' * 7))
+		self.regProp("match_tolerance", WizPropFloat(edit, 2.0, 2))
+		hlayout.addWidget(edit)
+		hlayout.addWidget(QLabel("meters"))
+		hlayout.addStretch()
+		vlayout.addLayout(hlayout)
+
 		idComboA = QComboBox()
 		idComboA.setMinimumWidth(100)
 		idComboB = QComboBox()
@@ -197,19 +210,6 @@ class InputPage(BasePage):
 			(self._identicalGeomRadio, "geom"),
 			(self._identicalIdRadio, "id"),
 		], "all"))
-
-		hlayout = QHBoxLayout()
-		hlayout.addSpacing(INDENT_WIDTH)
-		hlayout.addWidget(QLabel("Matching tolerance:"))
-		edit = QLineEdit()
-		edit.setAlignment(Qt.AlignmentFlag.AlignRight)
-		edit.setValidator(QDoubleValidator(0.0, 999999.0, 2, self))
-		edit.setFixedWidth(QFontMetrics(edit.font()).horizontalAdvance('0' * 7))
-		self.regProp("match_tolerance", WizPropFloat(edit, 2.0, 2))
-		hlayout.addWidget(edit)
-		hlayout.addWidget(QLabel("meters"))
-		hlayout.addStretch()
-		vlayout.addLayout(hlayout)
 
 		vlayout.addSpacing(SEPARATOR_HEIGHT)
 
