@@ -35,6 +35,13 @@ RANGES = [0.01, 0.10, 0.25, 0.5, 1.0]
 RANGE_TEXTS = ["%.2f - %.2f (-)" % (RANGES[-i-2], RANGES[-i-1]) for i in range(len(RANGES) - 1)]
 RANGE_TEXTS += ["%.2f - %.2f (+)" % (RANGES[i], RANGES[i+1]) for i in range(len(RANGES) - 1)]
 
+# Log-spaced fractions for the optional logarithmic colour scale (object output, 'all'
+# mode). Spans four decades so small changes get their own colour bands instead of being
+# swamped by outliers such as new streets going 0 -> large value.
+LOG_RANGES = [0.0001, 0.001, 0.01, 0.1, 1.0]
+LOG_RANGE_TEXTS = ["%.4f - %.4f (-)" % (LOG_RANGES[-i-2], LOG_RANGES[-i-1]) for i in range(len(LOG_RANGES) - 1)]
+LOG_RANGE_TEXTS += ["%.4f - %.4f (+)" % (LOG_RANGES[i], LOG_RANGES[i+1]) for i in range(len(LOG_RANGES) - 1)]
+
 # Tolerance for matching "identical" geometry between two scenarios (line endpoints,
 # or centroid for points/polygons). Coordinate drift varies by data source: a few cm
 # within one export, but up to ~1 m between differently digitised networks (e.g. the
@@ -365,14 +372,19 @@ class CompareResultsAnalysis(BaseAnalysis):
 		# unclassified (no change), matching the raster/polygon output.
 		maxAbs = max((abs(d) for _, d in features), default=0.0)
 		if maxAbs > 0:
-			norm_ranges = [(-RANGES[-i-1], -RANGES[-i-2]) for i in range(len(RANGES) - 1)]
-			norm_ranges += [(RANGES[i], RANGES[i+1]) for i in range(len(RANGES) - 1)]
+			# Logarithmic colour scale is offered only for the 'all' comparison, where a
+			# few outliers (new/removed objects) otherwise flatten the linear scale.
+			use_log = props.get('log_scale', False) and filter_mode == 'all'
+			frac = LOG_RANGES if use_log else RANGES
+			labels = LOG_RANGE_TEXTS if use_log else RANGE_TEXTS
+			norm_ranges = [(-frac[-i-1], -frac[-i-2]) for i in range(len(frac) - 1)]
+			norm_ranges += [(frac[i], frac[i+1]) for i in range(len(frac) - 1)]
 			obj_ranges = []
 			last = len(norm_ranges) - 1
 			for i, (lo, hi) in enumerate(norm_ranges):
 				lower = -1e30 if i == 0 else lo * maxAbs
 				upper = 1e30 if i == last else hi * maxAbs
-				obj_ranges.append((lower, upper, tupleFromHtmlColor(COLORS[i]), RANGE_TEXTS[i]))
+				obj_ranges.append((lower, upper, tupleFromHtmlColor(COLORS[i]), labels[i]))
 			self._model.makeGraduated(tableId, 'diff', obj_ranges)
 
 	def _applyIdenticalFilter(self, mode, props, line_arrays, value_arrays, rowids_per_table):

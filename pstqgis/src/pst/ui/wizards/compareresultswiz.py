@@ -292,6 +292,12 @@ class OutputPage(BasePage):
 			vlayout.addWidget(checkBox)
 			self._outputChecks[var_name] = checkBox
 
+		vlayout.addSpacing(SEPARATOR_HEIGHT)
+
+		self._logScaleCheck = QCheckBox("Logarithmic colour scale (object output, 'all' comparison)")
+		self.regProp("log_scale", WizProp(self._logScaleCheck, False))
+		vlayout.addWidget(self._logScaleCheck)
+
 		vlayout.addStretch()
 
 		self.setLayout(vlayout)
@@ -303,3 +309,5 @@ class OutputPage(BasePage):
 		self._outputChecks['object_layer'].setEnabled(is_object)
 		self._outputChecks['ranges_polygons'].setEnabled(not is_object)
 		self._outputChecks['gradient_raster'].setEnabled(not is_object)
+		# Log scale only affects the object output in 'all' comparison mode.
+		self._logScaleCheck.setEnabled(is_object and self.wizard().prop('filter_mode') == 'all')
