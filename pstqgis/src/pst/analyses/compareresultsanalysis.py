@@ -35,9 +35,11 @@ RANGES = [0.01, 0.10, 0.25, 0.5, 1.0]
 RANGE_TEXTS = ["%.2f - %.2f (-)" % (RANGES[-i-2], RANGES[-i-1]) for i in range(len(RANGES) - 1)]
 RANGE_TEXTS += ["%.2f - %.2f (+)" % (RANGES[i], RANGES[i+1]) for i in range(len(RANGES) - 1)]
 
-# Tolerance for matching "identical" line geometry between two networks.
-# Coordinate drift between QGIS exports is typically < 5 cm; 10 cm is generous.
-IDENTICAL_LINE_TOLERANCE_M = 0.1
+# Tolerance for matching "identical" geometry between two scenarios (line endpoints,
+# or centroid for points/polygons). Coordinate drift varies by data source: a few cm
+# within one export, but up to ~1 m between differently digitised networks (e.g. the
+# Gothenburg 1960 vs 1990 layers). 1 m closes those gaps without false merges.
+IDENTICAL_LINE_TOLERANCE_M = 1.0
 
 
 def SetGradientRasterShader(layer, valueRange):

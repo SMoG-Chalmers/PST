@@ -162,6 +162,10 @@ class QGISModel(object):
 		for lower, upper, rgba, label in ranges:
 			symbol = QgsSymbol.defaultSymbol(geometryType)
 			symbol.setColor(QColor(*rgba))
+			# Make the outline match the fill (no black border on polygons/points)
+			symbol_layer = symbol.symbolLayer(0)
+			if hasattr(symbol_layer, 'setStrokeColor'):
+				symbol_layer.setStrokeColor(QColor(*rgba))
 			range_objs.append(QgsRendererRange(lower, upper, symbol, label))
 		layer.setRenderer(QgsGraduatedSymbolRenderer(column, range_objs))
 		self._refreshLayer(layer)
