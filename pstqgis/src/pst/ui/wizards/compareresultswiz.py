@@ -20,7 +20,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 """
 
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtGui import QIntValidator, QFontMetrics
+from qgis.PyQt.QtGui import QIntValidator, QDoubleValidator, QFontMetrics
 from qgis.PyQt.QtWidgets import QComboBox, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QCheckBox, QRadioButton, QButtonGroup
 from qgis.core import QgsProject, QgsVectorLayer, QgsWkbTypes
 from ..wizard import BaseWiz, BasePage, WizProp, WizPropFloat, WizPropRadio
@@ -197,6 +197,19 @@ class InputPage(BasePage):
 			(self._identicalGeomRadio, "geom"),
 			(self._identicalIdRadio, "id"),
 		], "all"))
+
+		hlayout = QHBoxLayout()
+		hlayout.addSpacing(INDENT_WIDTH)
+		hlayout.addWidget(QLabel("Matching tolerance:"))
+		edit = QLineEdit()
+		edit.setAlignment(Qt.AlignmentFlag.AlignRight)
+		edit.setValidator(QDoubleValidator(0.0, 999999.0, 2, self))
+		edit.setFixedWidth(QFontMetrics(edit.font()).horizontalAdvance('0' * 7))
+		self.regProp("match_tolerance", WizPropFloat(edit, 2.0, 2))
+		hlayout.addWidget(edit)
+		hlayout.addWidget(QLabel("meters"))
+		hlayout.addStretch()
+		vlayout.addLayout(hlayout)
 
 		vlayout.addSpacing(SEPARATOR_HEIGHT)
 

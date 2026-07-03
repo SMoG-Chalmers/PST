@@ -42,11 +42,13 @@ LOG_RANGES = [0.0001, 0.001, 0.01, 0.1, 1.0]
 LOG_RANGE_TEXTS = ["%.4f - %.4f (-)" % (LOG_RANGES[-i-2], LOG_RANGES[-i-1]) for i in range(len(LOG_RANGES) - 1)]
 LOG_RANGE_TEXTS += ["%.4f - %.4f (+)" % (LOG_RANGES[i], LOG_RANGES[i+1]) for i in range(len(LOG_RANGES) - 1)]
 
-# Tolerance for matching "identical" geometry between two scenarios (line endpoints,
-# or centroid for points/polygons). Coordinate drift varies by data source: a few cm
-# within one export, but up to ~1 m between differently digitised networks (e.g. the
-# Gothenburg 1960 vs 1990 layers). 1 m closes those gaps without false merges.
-IDENTICAL_LINE_TOLERANCE_M = 1.0
+# Default/fallback tolerance for matching "identical" geometry (line endpoints, or
+# centroid for points/polygons) when the wizard value is missing. The user sets the
+# actual value in the wizard ('match_tolerance'). Coordinate drift varies by source:
+# a few cm within one export, up to ~1-2 m between differently digitised networks.
+# On the Gothenburg 1960/1990 nets, matches plateau by ~2 m and false merges/degenerate
+# short segments appear from ~5-10 m, so 2 m is a safe default.
+IDENTICAL_LINE_TOLERANCE_M = 2.0
 
 
 def SetGradientRasterShader(layer, valueRange):
@@ -299,13 +301,13 @@ class CompareResultsAnalysis(BaseAnalysis):
 		if geomType is None:
 			raise AnalysisException("Could not determine the geometry type of '%s'." % table1)
 
-		tol = IDENTICAL_LINE_TOLERANCE_M
+		tol = self._tolerance(props)
 
 		def geom_key(geom):
 			if geomType == GeometryType.LINE:
 				pts = geom.asMultiPolyline()[0] if geom.isMultipart() else geom.asPolyline()
 				p0, p1 = pts[0], pts[-1]
-				return self._canonKey(p0.x(), p0.y(), p1.x(), p1.y())
+				return self._canonKey(p0.x(), p0.y(), p1.x(), p1.y(), tol)
 			# point or polygon -> representative point (centroid), snapped to tolerance grid
 			c = geom.centroid().asPoint()
 			return (round(c.x() / tol) * tol, round(c.y() / tol) * tol)
@@ -391,8 +393,9 @@ class CompareResultsAnalysis(BaseAnalysis):
 		""" Filter line and value arrays so that only lines considered 'identical' between
 		    the two tables are kept. Returns (new_line_arrays, new_value_arrays). """
 		if mode == 'geom':
-			keep0, keep1 = self._matchByGeometry(line_arrays[0], line_arrays[1])
-			mode_label = "geometry matching (tolerance %.2f m)" % IDENTICAL_LINE_TOLERANCE_M
+			tol = self._tolerance(props)
+			keep0, keep1 = self._matchByGeometry(line_arrays[0], line_arrays[1], tol)
+			mode_label = "geometry matching (tolerance %.2f m)" % tol
 		elif mode == 'id':
 			keep0, keep1 = self._matchById(props, rowids_per_table)
 			mode_label = "ID matching"
@@ -424,15 +427,23 @@ class CompareResultsAnalysis(BaseAnalysis):
 		return new_line_arrays, new_value_arrays
 
 	@staticmethod
-	def _canonKey(x0, y0, x1, y1):
-		""" Canonical key for a line segment: endpoints snapped to tolerance grid,
+	def _tolerance(props):
+		""" Matching tolerance in meters from the wizard, with a safe positive fallback. """
+		try:
+			t = float(props.get('match_tolerance', IDENTICAL_LINE_TOLERANCE_M))
+		except (TypeError, ValueError):
+			return IDENTICAL_LINE_TOLERANCE_M
+		return t if t > 0 else IDENTICAL_LINE_TOLERANCE_M
+
+	@staticmethod
+	def _canonKey(x0, y0, x1, y1, tol):
+		""" Canonical key for a line segment: endpoints snapped to the tolerance grid,
 		    sorted so the key is direction-independent. """
-		tol = IDENTICAL_LINE_TOLERANCE_M
 		a = (round(x0 / tol) * tol, round(y0 / tol) * tol)
 		b = (round(x1 / tol) * tol, round(y1 / tol) * tol)
 		return (a, b) if a <= b else (b, a)
 
-	def _matchByGeometry(self, lines0, lines1):
+	def _matchByGeometry(self, lines0, lines1, tol):
 		""" Return (keep_indices0, keep_indices1) — indices of lines whose endpoint
 		    geometry matches in the other table (within tolerance, direction-independent). """
 		n0 = len(lines0) // 4
@@ -440,14 +451,14 @@ class CompareResultsAnalysis(BaseAnalysis):
 		keys0 = {}
 		for i in range(n0):
 			k = CompareResultsAnalysis._canonKey(
-				lines0[i*4], lines0[i*4+1], lines0[i*4+2], lines0[i*4+3])
+				lines0[i*4], lines0[i*4+1], lines0[i*4+2], lines0[i*4+3], tol)
 			# If duplicate keys exist within the same table, keep the first seen
 			if k not in keys0:
 				keys0[k] = i
 		keys1 = {}
 		for i in range(n1):
 			k = CompareResultsAnalysis._canonKey(
-				lines1[i*4], lines1[i*4+1], lines1[i*4+2], lines1[i*4+3])
+				lines1[i*4], lines1[i*4+1], lines1[i*4+2], lines1[i*4+3], tol)
 			if k not in keys1:
 				keys1[k] = i
 		common = keys0.keys() & keys1.keys()
