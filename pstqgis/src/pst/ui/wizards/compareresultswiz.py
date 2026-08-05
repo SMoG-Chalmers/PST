@@ -149,30 +149,33 @@ class InputPage(BasePage):
 
 		hlayout = QHBoxLayout()
 		hlayout.addSpacing(INDENT_WIDTH)
-		self._allLinesRadio = QRadioButton("All lines")
+		self._allLinesRadio = QRadioButton("All objects")
 		hlayout.addWidget(self._allLinesRadio)
 		hlayout.addStretch()
 		vlayout.addLayout(hlayout)
 
 		hlayout = QHBoxLayout()
 		hlayout.addSpacing(INDENT_WIDTH)
-		self._identicalGeomRadio = QRadioButton("Only identical lines (matching geometry)")
+		self._identicalGeomRadio = QRadioButton("Only identical objects (matching geometry)")
 		hlayout.addWidget(self._identicalGeomRadio)
 		hlayout.addStretch()
 		vlayout.addLayout(hlayout)
 
 		hlayout = QHBoxLayout()
 		hlayout.addSpacing(INDENT_WIDTH * 2)
-		hlayout.addWidget(QLabel("Matching tolerance:"))
+		toleranceLabel = QLabel("Matching tolerance:")
+		hlayout.addWidget(toleranceLabel)
 		edit = QLineEdit()
 		edit.setAlignment(Qt.AlignmentFlag.AlignRight)
 		edit.setValidator(QDoubleValidator(0.0, 999999.0, 2, self))
 		edit.setFixedWidth(QFontMetrics(edit.font()).horizontalAdvance('0' * 7))
 		self.regProp("match_tolerance", WizPropFloat(edit, 2.0, 2))
 		hlayout.addWidget(edit)
-		hlayout.addWidget(QLabel("meters"))
+		toleranceUnitLabel = QLabel("meters")
+		hlayout.addWidget(toleranceUnitLabel)
 		hlayout.addStretch()
 		vlayout.addLayout(hlayout)
+		self._toleranceWidgets = [toleranceLabel, edit, toleranceUnitLabel]
 
 		idComboA = QComboBox()
 		idComboA.setMinimumWidth(100)
@@ -180,7 +183,7 @@ class InputPage(BasePage):
 		idComboB.setMinimumWidth(100)
 		idLabel = QLabel("ID column:")
 		self._identicalIdRadio = WidgetEnableRadioButton(
-			"Only identical lines (matching ID)", [idLabel, idComboA, idComboB])
+			"Only identical objects (matching ID)", [idLabel, idComboA, idComboB])
 
 		hlayout = QHBoxLayout()
 		hlayout.addSpacing(INDENT_WIDTH)
@@ -197,6 +200,8 @@ class InputPage(BasePage):
 		vlayout.addLayout(hlayout)
 
 		self._idColumnCombos = [idComboA, idComboB]
+		self._idWidgets = [idLabel, idComboA, idComboB]
+		self._filterRadios = [self._allLinesRadio, self._identicalGeomRadio, self._identicalIdRadio]
 
 		filter_group = QButtonGroup(self)
 		filter_group.addButton(self._allLinesRadio)
@@ -224,7 +229,11 @@ class InputPage(BasePage):
 		hlayout.addWidget(QLabel("meters"))
 		hlayout.addStretch()
 		vlayout.addLayout(hlayout)
-		
+
+		hint = QLabel("Should be smaller than the typical object, e.g. 2-5 m for building polygons.")
+		hint.setStyleSheet("color: gray;")
+		vlayout.addWidget(hint)
+
 		vlayout.addSpacing(SEPARATOR_HEIGHT)
 
 		vlayout.addWidget(QLabel("Blurring extent"))
@@ -234,6 +243,14 @@ class InputPage(BasePage):
 		radio1 = QRadioButton("Automatic (pixel size * 7)")
 		radio1.setChecked(True)
 		hlayout.addWidget(radio1)
+		vlayout.addLayout(hlayout)
+
+		hlayout = QHBoxLayout()
+		hlayout.addSpacing(INDENT_WIDTH)
+		hint = QLabel("Automatic blurring scales with the pixel size. To compare runs\nwith different pixel sizes, use the same Custom value in both.")
+		hint.setStyleSheet("color: gray;")
+		hlayout.addWidget(hint)
+		hlayout.addStretch()
 		vlayout.addLayout(hlayout)
 
 		hlayout = QHBoxLayout()
@@ -271,12 +288,27 @@ class InputPage(BasePage):
 			tableCombo.clear()
 			for layer in self._lineLayers:
 				tableCombo.addItem(layer.name())
+		self._updateFilterEnabled()
 
 	def _onTableSelected(self, resultIndex, layerIndex):
 		if layerIndex < 0 or layerIndex >= len(self._lineLayers):
 			return
 		InputPage.updateColumnCombo(self._columnCombos[resultIndex], self._lineLayers[layerIndex])
 		InputPage.updateColumnCombo(self._idColumnCombos[resultIndex], self._lineLayers[layerIndex])
+		self._updateFilterEnabled()
+
+	def _updateFilterEnabled(self):
+		""" The 'identical objects' filter only has meaning when two different tables are
+		    compared; with a single table it is a no-op (the analysis skips it), so grey
+		    the whole section out to make that clear. """
+		enable = (self._tableCombos[0].currentText() != self._tableCombos[1].currentText())
+		for w in self._filterRadios:
+			w.setEnabled(enable)
+		for w in self._toleranceWidgets:
+			w.setEnabled(enable)
+		# The ID widgets are additionally managed by the 'matching ID' radio itself
+		for w in self._idWidgets:
+			w.setEnabled(enable and self._identicalIdRadio.isChecked())
 
 
 class OutputPage(BasePage):

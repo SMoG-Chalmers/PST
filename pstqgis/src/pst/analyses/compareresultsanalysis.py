@@ -553,7 +553,7 @@ class CompareResultsAnalysis(BaseAnalysis):
 		if not keep0 or not keep1:
 			raise AnalysisException(
 				"No identical lines found between '%s' and '%s' using %s. "
-				"Try a different matching mode, or use 'All lines'." % (
+				"Try a different matching mode, or use 'All objects'." % (
 					props['in_table1'], props['in_table2'], mode_label))
 
 		new_line_arrays = []
