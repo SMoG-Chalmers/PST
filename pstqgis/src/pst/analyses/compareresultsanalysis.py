@@ -137,47 +137,65 @@ class CompareResultsAnalysis(BaseAnalysis):
 				return
 
 			# --- Area comparison (raster) path ---
-			# Raster currently supports line geometry only; point/polygon raster is future work.
-			if self._model.geometryType(props['in_table1']) != GeometryType.LINE:
-				raise AnalysisException(
-					"Area comparison currently supports line layers only. "
-					"Use Object comparison for point or polygon layers.")
+			geomType = self._model.geometryType(props['in_table1'])
+			if geomType is None:
+				raise AnalysisException("Could not determine the geometry type of '%s'." % props['in_table1'])
+			if separateTables:
+				geomType2 = self._model.geometryType(props['in_table2'])
+				if geomType2 != geomType:
+					raise AnalysisException(
+						"Both tables must have the same geometry type "
+						"('%s' is %s, '%s' is %s)." % (props['in_table1'], geomType, props['in_table2'], geomType2))
 
-			line_arrays = []
-			value_arrays = []
-			rowids_per_table = []  # for ID-based filtering
-
-			# --- Read input
-			task_index = Tasks.READ1
-			for i in range(1,3):
-				table_name = props['in_table%d' % i]
-				column_name = props['in_column%d' % i]
-
-				progress.setCurrentTask(task_index)
-				task_index += 1
-				if separateTables or len(line_arrays) == 0:
-					max_line_count = model.rowCount(table_name)
-					lines = Vector(ctypes.c_double, max_line_count*4, stack_allocator)
-					rowids = Vector(ctypes.c_longlong, max_line_count, stack_allocator)
-					model.readLines(table_name, lines, rowids, progress)
-					line_arrays.append(lines)
-					rowids_per_table.append(rowids)
-					#QgsMessageLog.logMessage('%s: %d' % (table_name, lines.size()), 'PST', Qgis.Info)
-				else:
-					line_arrays.append(None)
-					rowids_per_table.append(rowids_per_table[0])
-
-				progress.setCurrentTask(task_index)
-				task_index += 1
-				values = Vector(ctypes.c_float, max_line_count, stack_allocator)
-				self._model.readValues(table_name, column_name, rowids, values)
-				value_arrays.append(values)
-
-			# --- Apply 'identical lines' filter (Frame 3) ---
 			filter_mode = props.get('filter_mode', 'all')
-			if filter_mode != 'all' and separateTables:
-				line_arrays, value_arrays = self._applyIdenticalFilter(
-					filter_mode, props, line_arrays, value_arrays, rowids_per_table)
+
+			if geomType == GeometryType.LINE:
+				pstalgoGeometryType = pstalgo.CompareResultsGeometryType.LINES
+				polygon_data_arrays = [None, None]
+
+				line_arrays = []
+				value_arrays = []
+				rowids_per_table = []  # for ID-based filtering
+
+				# --- Read input
+				task_index = Tasks.READ1
+				for i in range(1,3):
+					table_name = props['in_table%d' % i]
+					column_name = props['in_column%d' % i]
+
+					progress.setCurrentTask(task_index)
+					task_index += 1
+					if separateTables or len(line_arrays) == 0:
+						max_line_count = model.rowCount(table_name)
+						lines = Vector(ctypes.c_double, max_line_count*4, stack_allocator)
+						rowids = Vector(ctypes.c_longlong, max_line_count, stack_allocator)
+						model.readLines(table_name, lines, rowids, progress)
+						line_arrays.append(lines)
+						rowids_per_table.append(rowids)
+						#QgsMessageLog.logMessage('%s: %d' % (table_name, lines.size()), 'PST', Qgis.Info)
+					else:
+						line_arrays.append(None)
+						rowids_per_table.append(rowids_per_table[0])
+
+					progress.setCurrentTask(task_index)
+					task_index += 1
+					values = Vector(ctypes.c_float, max_line_count, stack_allocator)
+					self._model.readValues(table_name, column_name, rowids, values)
+					value_arrays.append(values)
+
+				# --- Apply 'identical lines' filter (Frame 3) ---
+				if filter_mode != 'all' and separateTables:
+					line_arrays, value_arrays = self._applyIdenticalFilter(
+						filter_mode, props, line_arrays, value_arrays, rowids_per_table)
+			else:
+				# Point/polygon raster: read geometry generically and pack into the flat
+				# arrays pstalgo expects (points: bilinear splat; polygons: area-weighted fill)
+				pstalgoGeometryType = (pstalgo.CompareResultsGeometryType.POINTS
+					if geomType == GeometryType.POINT
+					else pstalgo.CompareResultsGeometryType.POLYGONS)
+				progress.setCurrentTask(Tasks.READ1)
+				line_arrays, value_arrays, polygon_data_arrays = self._readObjectArrays(
+					geomType, props, filter_mode, separateTables)
 
 			pixelSize = max(1, int(props['pixel_size']))
 			blurRadius = max(1, int(props['blur_extent'])) if props['custom_blur_extent'] else pixelSize * 7
@@ -188,14 +206,17 @@ class CompareResultsAnalysis(BaseAnalysis):
 			# --- ANALYSIS ---
 			progress.setCurrentTask(Tasks.COMPARE)
 			(gradientRaster, rasterMin, rasterMax, result1) = pstalgo.CompareResults(
-				lineCoords1 = line_arrays[0], 
-				values1 = value_arrays[0], 
-				lineCoords2 = line_arrays[1], 
+				lineCoords1 = line_arrays[0],
+				values1 = value_arrays[0],
+				lineCoords2 = line_arrays[1],
 				values2 = value_arrays[1],
 				mode = compareMode,
 				# M = props['M'],
-				resolution = pixelSize, 
-				blurRadius = blurRadius, 
+				resolution = pixelSize,
+				blurRadius = blurRadius,
+				geometryType = pstalgoGeometryType,
+				polygonData1 = polygon_data_arrays[0],
+				polygonData2 = polygon_data_arrays[1],
 				progress_callback = pstalgo.CreateAnalysisDelegateCallbackWrapper(progress))
 
 			if createRangesPolygons:
@@ -388,6 +409,133 @@ class CompareResultsAnalysis(BaseAnalysis):
 				upper = 1e30 if i == last else hi * maxAbs
 				obj_ranges.append((lower, upper, tupleFromHtmlColor(COLORS[i]), labels[i]))
 			self._model.makeGraduated(tableId, 'diff', obj_ranges)
+
+	def _readObjectArrays(self, geomType, props, filter_mode, separateTables):
+		""" Reads point or polygon objects and packs them into the flat arrays pstalgo
+		    expects. Returns (coord_arrays, value_arrays, polygon_data_arrays), each a
+		    2-element list. Index 1 of coord/polygon-data is None when both value
+		    columns come from the same table. """
+		table1, table2 = props['in_table1'], props['in_table2']
+		col1, col2 = props['in_column1'], props['in_column2']
+
+		if filter_mode == 'id' and separateTables:
+			id1 = props.get('id_column1', '')
+			id2 = props.get('id_column2', '')
+			if not id1 or not id2:
+				raise AnalysisException(
+					"ID matching requires an ID column to be selected for both tables.")
+		else:
+			id1 = id2 = None
+
+		objs1 = list(self._model.readObjects(table1, col1, id1))
+		objs2 = list(self._model.readObjects(table2, col2, id2))
+
+		if filter_mode != 'all' and separateTables:
+			objs1, objs2 = self._intersectObjects(objs1, objs2, filter_mode, props)
+
+		if geomType == GeometryType.POINT:
+			(coords1, values1) = self._packPoints(objs1)
+			(coords2, values2) = self._packPoints(objs2)
+			polydata1 = polydata2 = None
+		else:
+			(coords1, values1, polydata1) = self._packPolygons(objs1)
+			(coords2, values2, polydata2) = self._packPolygons(objs2)
+
+		if not separateTables:
+			# Same table: geometry is passed once, the second entry only carries values
+			coords2 = None
+			polydata2 = None
+
+		return ([coords1, coords2], [values1, values2], [polydata1, polydata2])
+
+	def _intersectObjects(self, objs1, objs2, filter_mode, props):
+		""" Keep only objects present in both tables, matched by ID column value or by
+		    centroid snapped to the matching tolerance grid. Same semantics as the
+		    object comparison path. """
+		tol = self._tolerance(props)
+
+		def key(geom, idval):
+			if filter_mode == 'id':
+				return idval
+			c = geom.centroid().asPoint()
+			return (round(c.x() / tol) * tol, round(c.y() / tol) * tol)
+
+		map1 = {}
+		for g, v, i in objs1:
+			k = key(g, i)
+			if k not in map1:
+				map1[k] = (g, v, i)
+		map2 = {}
+		for g, v, i in objs2:
+			k = key(g, i)
+			if k not in map2:
+				map2[k] = (g, v, i)
+		common = map1.keys() & map2.keys()
+		if not common:
+			raise AnalysisException(
+				"No identical objects found between '%s' and '%s'. "
+				"Try a different matching mode, or include all objects." % (
+					props['in_table1'], props['in_table2']))
+		return ([map1[k] for k in common], [map2[k] for k in common])
+
+	@staticmethod
+	def _toFloat(value):
+		""" Attribute value to float; NULL/None/non-numeric becomes 0.0. """
+		try:
+			return float(value)
+		except (TypeError, ValueError):
+			return 0.0
+
+	@staticmethod
+	def _packPoints(objs):
+		""" Packs point objects into pstalgo's flat coordinate format (x,y doubles).
+		    The centroid is used, so multipoints and stray non-point geometry degrade
+		    gracefully to their representative point. """
+		coords = array.array('d')
+		values = array.array('f')
+		for geom, value, _ in objs:
+			p = geom.centroid().asPoint()
+			coords.append(p.x())
+			coords.append(p.y())
+			values.append(CompareResultsAnalysis._toFloat(value))
+		return (coords, values)
+
+	@staticmethod
+	def _packPolygons(objs):
+		""" Packs polygon objects into pstalgo's flat format: all ring vertices
+		    consecutively in coords, ring structure per polygon as
+		    [ring_count, points_in_ring_0, points_in_ring_1, ...]. Multipolygon parts
+		    are flattened into one object (even-odd fill renders them correctly).
+		    QGIS repeats the first vertex as ring closure; pstalgo closes rings
+		    implicitly, so the duplicate is stripped. Features without any usable
+		    ring are skipped entirely (geometry and value). """
+		coords = array.array('d')
+		values = array.array('f')
+		polydata = array.array('I')
+		for geom, value, _ in objs:
+			rings = []
+			if geom.isMultipart():
+				for part in geom.asMultiPolygon():
+					rings.extend(part)
+			else:
+				rings.extend(geom.asPolygon())
+			clean = []
+			for ring in rings:
+				if len(ring) >= 2 and ring[0] == ring[-1]:
+					ring = ring[:-1]
+				if len(ring) >= 3:
+					clean.append(ring)
+			if not clean:
+				continue
+			polydata.append(len(clean))
+			for ring in clean:
+				polydata.append(len(ring))
+			for ring in clean:
+				for p in ring:
+					coords.append(p.x())
+					coords.append(p.y())
+			values.append(CompareResultsAnalysis._toFloat(value))
+		return (coords, values, polydata)
 
 	def _applyIdenticalFilter(self, mode, props, line_arrays, value_arrays, rowids_per_table):
 		""" Filter line and value arrays so that only lines considered 'identical' between
