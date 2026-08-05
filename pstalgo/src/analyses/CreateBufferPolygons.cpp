@@ -22,6 +22,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 #include <algorithm>
 #include <memory>
 #include <stdexcept>
+#include <vector>
 #include <pstalgo/analyses/CreateBufferPolygons.h>
 #include <pstalgo/Debug.h>
 #include <pstalgo/geometry/Geometry.h>
@@ -99,7 +100,99 @@ namespace psta
 			img.at(x + 1, y + 1) += dx * dy * intensity;
 	}
 
-	static void RasterGeometry(Arr2dView<float>& img, SCompareResultsDesc::EGeometryType geometryType, const double2* coords, const float* values, size_t objectCount, float multiplier, const double2& pixelOrigin, float invPixelSize)
+	// Deposits intensity * covered_cell_fraction into each cell, so that the total
+	// deposited mass equals intensity * polygon_area (in pixel units). Coverage is
+	// estimated with SSxSS supersampling per cell, even-odd fill rule (holes work
+	// with any ring orientation). Vertices are expected in pixel space, relative to
+	// CENTER of upper left pixel (same convention as RasterLine/RasterPoint).
+	static void RasterPolygon(Arr2dView<float>& img, const float2* vertices, const unsigned int* ringPointCounts, unsigned int ringCount, float intensity)
+	{
+		const int SS = 4;  // Supersamples per pixel axis
+		const float sampleWeight = 1.f / (SS * SS);
+
+		unsigned int totalPointCount = 0;
+		for (unsigned int r = 0; r < ringCount; ++r)
+			totalPointCount += ringPointCounts[r];
+		if (totalPointCount < 3)
+			return;
+
+		// Signed area (shoelace) for the sub-pixel fallback below
+		float signedArea2 = 0;
+		{
+			const float2* v = vertices;
+			for (unsigned int r = 0; r < ringCount; ++r)
+			{
+				const unsigned int n = ringPointCounts[r];
+				for (unsigned int k = 0; k < n; ++k)
+				{
+					const auto& p0 = v[k];
+					const auto& p1 = v[(k + 1) % n];
+					signedArea2 += p0.x * p1.y - p1.x * p0.y;
+				}
+				v += n;
+			}
+		}
+
+		const auto bb = CRectf::BBFromPoints(vertices, totalPointCount);
+
+		// Sub-pixel polygons: scanline coverage quantizes to whole supersamples,
+		// which is disproportionately coarse for tiny footprints. Deposit the exact
+		// mass as a point instead.
+		const float area = .5f * abs(signedArea2);
+		if (area < 4.f * sampleWeight)
+		{
+			if (area > 0)
+				RasterPoint(img, bb.Center(), intensity * area);
+			return;
+		}
+
+		// Subsample row centers are at ((j + .5) / SS) - .5; pixel row = j / SS
+		const int jMin = std::max(0, (int)ceil((bb.m_Min.y + .5f) * SS - .5f));
+		const int jMax = std::min((int)img.Height() * SS - 1, (int)floor((bb.m_Max.y + .5f) * SS - .5f));
+
+		std::vector<float> crossings;
+		size_t coveredSampleCount = 0;
+		for (int j = jMin; j <= jMax; ++j)
+		{
+			const float ys = ((j + .5f) / SS) - .5f;
+
+			crossings.clear();
+			const float2* v = vertices;
+			for (unsigned int r = 0; r < ringCount; ++r)
+			{
+				const unsigned int n = ringPointCounts[r];
+				for (unsigned int k = 0; k < n; ++k)
+				{
+					const auto& p0 = v[k];
+					const auto& p1 = v[(k + 1) % n];
+					if ((p0.y <= ys) != (p1.y <= ys))
+						crossings.push_back(p0.x + (ys - p0.y) / (p1.y - p0.y) * (p1.x - p0.x));
+				}
+				v += n;
+			}
+			std::sort(crossings.begin(), crossings.end());
+
+			const int y = j / SS;
+			for (size_t s = 0; s + 1 < crossings.size(); s += 2)
+			{
+				const int kMin = std::max(0, (int)ceil((crossings[s] + .5f) * SS - .5f));
+				const int kMax = std::min((int)img.Width() * SS - 1, (int)floor((crossings[s + 1] + .5f) * SS - .5f));
+				for (int k = kMin; k <= kMax; ++k)
+				{
+					img.at(k / SS, y) += intensity * sampleWeight;
+					++coveredSampleCount;
+				}
+			}
+		}
+
+		// Safety net for thin slivers with area above the threshold but too narrow
+		// to catch any supersample: deposit the full mass as a point instead of
+		// dropping the object silently.
+		if (0 == coveredSampleCount)
+			RasterPoint(img, bb.Center(), intensity * area);
+	}
+
+	static void RasterGeometry(Arr2dView<float>& img, SCompareResultsDesc::EGeometryType geometryType, const double2* coords, const unsigned int* polygonData, const float* values, size_t objectCount, float multiplier, const double2& pixelOrigin, float invPixelSize)
 	{
 		switch (geometryType)
 		{
@@ -118,9 +211,46 @@ namespace psta
 				RasterPoint(img, p * invPixelSize, values[i] * multiplier);
 			}
 			break;
+		case SCompareResultsDesc::Polygons:
+		{
+			if (nullptr == polygonData)
+				throw std::runtime_error("CompareResults: polygon data missing");
+			std::vector<float2> vertices;
+			std::vector<unsigned int> ringPointCounts;
+			const unsigned int* pd = polygonData;
+			const double2* v = coords;
+			for (size_t i = 0; i < objectCount; ++i)
+			{
+				const unsigned int ringCount = *pd++;
+				ringPointCounts.assign(pd, pd + ringCount);
+				pd += ringCount;
+				unsigned int pointCount = 0;
+				for (unsigned int r = 0; r < ringCount; ++r)
+					pointCount += ringPointCounts[r];
+				vertices.clear();
+				vertices.reserve(pointCount);
+				for (unsigned int k = 0; k < pointCount; ++k, ++v)
+					vertices.push_back(float2(*v - pixelOrigin) * invPixelSize);
+				RasterPolygon(img, vertices.data(), ringPointCounts.data(), ringCount, values[i] * multiplier);
+			}
+			break;
+		}
 		default:
 			throw std::runtime_error("CompareResults: unsupported geometry type");
 		}
+	}
+
+	static size_t PolygonTotalPointCount(const unsigned int* polygonData, size_t polygonCount)
+	{
+		size_t pointCount = 0;
+		const unsigned int* pd = polygonData;
+		for (size_t i = 0; i < polygonCount; ++i)
+		{
+			const unsigned int ringCount = *pd++;
+			for (unsigned int r = 0; r < ringCount; ++r)
+				pointCount += *pd++;
+		}
+		return pointCount;
 	}
 
 	// Coordinates are expected to be relative to CENTER of upper left pixel in image.
@@ -255,13 +385,25 @@ namespace psta
 		const float pixelSizeMeters = desc.Resolution;
 		const float invPixelSizeMeters = 1.0f / desc.Resolution;
 
-		const unsigned int pointsPerObject = (SCompareResultsDesc::Lines == desc.GeometryType) ? 2 : 1;
+		auto pointCountOf = [&](unsigned int objectCount, const unsigned int* polygonData) -> size_t
+		{
+			switch (desc.GeometryType)
+			{
+			case SCompareResultsDesc::Lines:    return objectCount * 2;
+			case SCompareResultsDesc::Points:   return objectCount;
+			case SCompareResultsDesc::Polygons:
+				if (nullptr == polygonData)
+					throw std::runtime_error("CompareResults: polygon data missing");
+				return PolygonTotalPointCount(polygonData, objectCount);
+			}
+			throw std::runtime_error("CompareResults: unsupported geometry type");
+		};
 
 		// Calculate bounding box
-		auto bb = CRectd::BBFromPoints((const double2*)desc.LineCoords1, desc.LineCount1 * pointsPerObject);
+		auto bb = CRectd::BBFromPoints((const double2*)desc.LineCoords1, (unsigned int)pointCountOf(desc.LineCount1, desc.PolygonData1));
 		if (desc.LineCoords2)
 		{
-			const auto bb2 = CRectd::BBFromPoints((const double2*)desc.LineCoords2, desc.LineCount2 * pointsPerObject);
+			const auto bb2 = CRectd::BBFromPoints((const double2*)desc.LineCoords2, (unsigned int)pointCountOf(desc.LineCount2, desc.PolygonData2));
 			bb.GrowToIncludeRect(bb2);
 		}
 		bb.Inflate(desc.BlurRadius * SIGMA_RANGE);
@@ -284,14 +426,14 @@ namespace psta
 		if (SCompareResultsDesc::Normalized == desc.Mode)
 		{
 			{
-				RasterGeometry(sdf_view, desc.GeometryType, (const double2*)desc.LineCoords1, desc.Values1, desc.LineCount1, -1.f, pixel_origin, invPixelSizeMeters);
+				RasterGeometry(sdf_view, desc.GeometryType, (const double2*)desc.LineCoords1, desc.PolygonData1, desc.Values1, desc.LineCount1, -1.f, pixel_origin, invPixelSizeMeters);
 				if (desc.LineCoords2)
 				{
-					RasterGeometry(sdf_view, desc.GeometryType, (const double2*)desc.LineCoords2, desc.Values2, desc.LineCount2, 1.f, pixel_origin, invPixelSizeMeters);
+					RasterGeometry(sdf_view, desc.GeometryType, (const double2*)desc.LineCoords2, desc.PolygonData2, desc.Values2, desc.LineCount2, 1.f, pixel_origin, invPixelSizeMeters);
 				}
 				else
 				{
-					RasterGeometry(sdf_view, desc.GeometryType, (const double2*)desc.LineCoords1, desc.Values2, desc.LineCount1, 1.f, pixel_origin, invPixelSizeMeters);
+					RasterGeometry(sdf_view, desc.GeometryType, (const double2*)desc.LineCoords1, desc.PolygonData1, desc.Values2, desc.LineCount1, 1.f, pixel_origin, invPixelSizeMeters);
 				}
 
 				GaussianBlur(sdf_view, desc.BlurRadius * invPixelSizeMeters);
@@ -324,17 +466,17 @@ namespace psta
 				before_view.Clear(0);
 
 				// Before
-				RasterGeometry(before_view, desc.GeometryType, (const double2*)desc.LineCoords1, desc.Values1, desc.LineCount1, 1.f, pixel_origin, invPixelSizeMeters);
+				RasterGeometry(before_view, desc.GeometryType, (const double2*)desc.LineCoords1, desc.PolygonData1, desc.Values1, desc.LineCount1, 1.f, pixel_origin, invPixelSizeMeters);
 				GaussianBlur(before_view, desc.BlurRadius * invPixelSizeMeters);
 
 				// After
 				if (desc.LineCoords2)
 				{
-					RasterGeometry(sdf_view, desc.GeometryType, (const double2*)desc.LineCoords2, desc.Values2, desc.LineCount2, 1.f, pixel_origin, invPixelSizeMeters);
+					RasterGeometry(sdf_view, desc.GeometryType, (const double2*)desc.LineCoords2, desc.PolygonData2, desc.Values2, desc.LineCount2, 1.f, pixel_origin, invPixelSizeMeters);
 				}
 				else
 				{
-					RasterGeometry(sdf_view, desc.GeometryType, (const double2*)desc.LineCoords1, desc.Values2, desc.LineCount1, 1.f, pixel_origin, invPixelSizeMeters);
+					RasterGeometry(sdf_view, desc.GeometryType, (const double2*)desc.LineCoords1, desc.PolygonData1, desc.Values2, desc.LineCount1, 1.f, pixel_origin, invPixelSizeMeters);
 				}
 				GaussianBlur(sdf_view, desc.BlurRadius * invPixelSizeMeters);
 

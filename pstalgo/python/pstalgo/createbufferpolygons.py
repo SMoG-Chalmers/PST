@@ -30,8 +30,9 @@ class CompareResultsMode:
 
 
 class CompareResultsGeometryType:
-	LINES = 0    # 2 coordinate pairs per object
-	POINTS = 1   # 1 coordinate pair per object
+	LINES = 0     # 2 coordinate pairs per object
+	POINTS = 1    # 1 coordinate pair per object
+	POLYGONS = 2  # Ring structure in polygonData, ring vertices consecutively in coords
 
 
 class SCompareResultsDesc(Structure) :
@@ -41,11 +42,13 @@ class SCompareResultsDesc(Structure) :
 		("LineCount1", c_uint),
 		("LineCoords1", POINTER(c_double)),
 		("Values1", POINTER(c_float)),
+		("PolygonData1", POINTER(c_uint)),
 		("Mode", c_uint),
 		("M", c_float),
 		("LineCount2", c_uint),
 		("LineCoords2", POINTER(c_double)),
 		("Values2", POINTER(c_float)),
+		("PolygonData2", POINTER(c_uint)),
 		("BlurRadius", c_float),
 		("Resolution", c_float),
 		("OutRaster", c_void_p),
@@ -56,7 +59,22 @@ class SCompareResultsDesc(Structure) :
 	]
 	def __init__(self, *args):
 		Structure.__init__(self, *args)
-		self.Version = 5
+		self.Version = 6
+
+
+def _WalkPolygonData(polygonData):
+	""" Returns (polygon_count, total_point_count) of a
+	[ring_count, points_in_ring_0, points_in_ring_1, ...]* stream. """
+	i = 0
+	polygonCount = 0
+	pointCount = 0
+	while i < len(polygonData):
+		ringCount = polygonData[i]; i += 1
+		for _ in range(ringCount):
+			pointCount += polygonData[i]; i += 1
+		polygonCount += 1
+	assert i == len(polygonData)
+	return (polygonCount, pointCount)
 
 
 def PSTACompareResults(psta, desc):
@@ -68,21 +86,33 @@ def PSTACompareResults(psta, desc):
 	return fn(byref(desc))
 
 """ The returned handle must be freed with call to Free(). """
-def CompareResults(lineCoords1, values1, lineCoords2=None, values2=None, mode=0, M=0, resolution=0, blurRadius=1, geometryType=CompareResultsGeometryType.LINES, progress_callback=None):
-	# Coordinate doubles per object: lines = 2 points = 4 doubles, points = 1 point = 2 doubles
-	coordsPerObject = 4 if geometryType == CompareResultsGeometryType.LINES else 2
+def CompareResults(lineCoords1, values1, lineCoords2=None, values2=None, mode=0, M=0, resolution=0, blurRadius=1, geometryType=CompareResultsGeometryType.LINES, polygonData1=None, polygonData2=None, progress_callback=None):
 	desc = SCompareResultsDesc()
 	desc.GeometryType = geometryType
 	(desc.Values1, valueCount1) = UnpackArray(values1, 'f')
 	(desc.Values2, valueCount2) = UnpackArray(values2, 'f')
 	(desc.LineCoords1, n) = UnpackArray(lineCoords1, 'd')
-	desc.LineCount1 = int(n / coordsPerObject); assert(n % coordsPerObject == 0)
+	if geometryType == CompareResultsGeometryType.POLYGONS:
+		assert polygonData1 is not None
+		(polygonCount, pointCount) = _WalkPolygonData(polygonData1)
+		(desc.PolygonData1, _) = UnpackArray(polygonData1, 'I')
+		desc.LineCount1 = polygonCount; assert(n == pointCount * 2)
+	else:
+		# Coordinate doubles per object: lines = 2 points = 4 doubles, points = 1 point = 2 doubles
+		coordsPerObject = 4 if geometryType == CompareResultsGeometryType.LINES else 2
+		desc.LineCount1 = int(n / coordsPerObject); assert(n % coordsPerObject == 0)
 	assert(valueCount1 == desc.LineCount1)
 	if lineCoords2 is None:
 		assert(valueCount1 == valueCount2)
 	else:
 		(desc.LineCoords2, n) = UnpackArray(lineCoords2, 'd')
-		desc.LineCount2 = int(n / coordsPerObject); assert(n % coordsPerObject == 0)
+		if geometryType == CompareResultsGeometryType.POLYGONS:
+			assert polygonData2 is not None
+			(polygonCount, pointCount) = _WalkPolygonData(polygonData2)
+			(desc.PolygonData2, _) = UnpackArray(polygonData2, 'I')
+			desc.LineCount2 = polygonCount; assert(n == pointCount * 2)
+		else:
+			desc.LineCount2 = int(n / coordsPerObject); assert(n % coordsPerObject == 0)
 		assert(valueCount2 == desc.LineCount2)
 	desc.Mode = mode
 	desc.M = M

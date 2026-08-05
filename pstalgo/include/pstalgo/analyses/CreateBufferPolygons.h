@@ -32,19 +32,21 @@ struct SCompareResultsDesc
 	SCompareResultsDesc() : m_Version(VERSION), GeometryType(Lines) {}
 
 	// Version
-	static const unsigned int VERSION = 5;
+	static const unsigned int VERSION = 6;
 	unsigned int m_Version;
 
 	enum EGeometryType : unsigned int
 	{
 		Lines = 0,     // 2 coordinate pairs per object
 		Points = 1,    // 1 coordinate pair per object
+		Polygons = 2,  // Ring structure in PolygonData, ring vertices consecutively in coords
 	};
 	EGeometryType GeometryType;  // Geometry type of both data sets
 
-	unsigned int LineCount1;  // Object count (lines or points)
+	unsigned int LineCount1;  // Object count (lines, points or polygons)
 	double* LineCoords1;
 	float* Values1;
+	unsigned int* PolygonData1;  // Only when GeometryType == Polygons, otherwise NULL. Per polygon: [ring_count, points_in_ring_0, points_in_ring_1, ...]
 
 	enum EMode : unsigned int
 	{
@@ -58,6 +60,7 @@ struct SCompareResultsDesc
 	unsigned int LineCount2;  // Optional, must be zero if not used
 	double* LineCoords2;      // Optional, must be NULL if not used
 	float* Values2;           // Number of values from LineCount2 if two line sets are used, otherwise LineCount1.
+	unsigned int* PolygonData2;  // Only when GeometryType == Polygons and second data set is used, otherwise NULL. Same format as PolygonData1.
 
 	float BlurRadius;         // Radius for 1 std dev.
 	float Resolution;         // Pixel size in meters
