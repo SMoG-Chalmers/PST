@@ -29,9 +29,15 @@ class CompareResultsMode:
 	RELATIVE_PERCENT = 1
 
 
+class CompareResultsGeometryType:
+	LINES = 0    # 2 coordinate pairs per object
+	POINTS = 1   # 1 coordinate pair per object
+
+
 class SCompareResultsDesc(Structure) :
 	_fields_ = [
 		("Version", c_uint),
+		("GeometryType", c_uint),
 		("LineCount1", c_uint),
 		("LineCoords1", POINTER(c_double)),
 		("Values1", POINTER(c_float)),
@@ -50,7 +56,7 @@ class SCompareResultsDesc(Structure) :
 	]
 	def __init__(self, *args):
 		Structure.__init__(self, *args)
-		self.Version = 4
+		self.Version = 5
 
 
 def PSTACompareResults(psta, desc):
@@ -62,18 +68,21 @@ def PSTACompareResults(psta, desc):
 	return fn(byref(desc))
 
 """ The returned handle must be freed with call to Free(). """
-def CompareResults(lineCoords1, values1, lineCoords2=None, values2=None, mode=0, M=0, resolution=0, blurRadius=1, progress_callback=None):
+def CompareResults(lineCoords1, values1, lineCoords2=None, values2=None, mode=0, M=0, resolution=0, blurRadius=1, geometryType=CompareResultsGeometryType.LINES, progress_callback=None):
+	# Coordinate doubles per object: lines = 2 points = 4 doubles, points = 1 point = 2 doubles
+	coordsPerObject = 4 if geometryType == CompareResultsGeometryType.LINES else 2
 	desc = SCompareResultsDesc()
+	desc.GeometryType = geometryType
 	(desc.Values1, valueCount1) = UnpackArray(values1, 'f')
 	(desc.Values2, valueCount2) = UnpackArray(values2, 'f')
 	(desc.LineCoords1, n) = UnpackArray(lineCoords1, 'd')
-	desc.LineCount1 = int(n / 4); assert(n % 4 == 0)
+	desc.LineCount1 = int(n / coordsPerObject); assert(n % coordsPerObject == 0)
 	assert(valueCount1 == desc.LineCount1)
 	if lineCoords2 is None:
 		assert(valueCount1 == valueCount2)
 	else:
 		(desc.LineCoords2, n) = UnpackArray(lineCoords2, 'd')
-		desc.LineCount2 = int(n / 4); assert(n % 4 == 0)
+		desc.LineCount2 = int(n / coordsPerObject); assert(n % coordsPerObject == 0)
 		assert(valueCount2 == desc.LineCount2)
 	desc.Mode = mode
 	desc.M = M

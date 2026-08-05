@@ -21,6 +21,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 #include <algorithm>
 #include <memory>
+#include <stdexcept>
 #include <pstalgo/analyses/CreateBufferPolygons.h>
 #include <pstalgo/Debug.h>
 #include <pstalgo/geometry/Geometry.h>
@@ -74,6 +75,51 @@ namespace psta
 				img.at(x, y + 1) += (1.f - dx) * dy * sampleIntensity;
 			if (checkCoords(x + 1, y + 1))
 				img.at(x + 1, y + 1) += dx * dy * sampleIntensity;
+		}
+	}
+
+	static void RasterPoint(Arr2dView<float>& img, const float2& p, float intensity)
+	{
+		auto checkCoords = [&](int x, int y) -> bool
+		{
+			return (x >= 0) & (x < (int)img.Width()) & (y >= 0) & (y < (int)img.Height());
+		};
+
+		const int x = (int)p.x;
+		const int y = (int)p.y;
+		const float dx = p.x - (float)x;
+		const float dy = p.y - (float)y;
+		if (checkCoords(x, y))
+			img.at(x, y) += (1.f - dx) * (1.f - dy) * intensity;
+		if (checkCoords(x + 1, y))
+			img.at(x + 1, y) += dx * (1.f - dy) * intensity;
+		if (checkCoords(x, y + 1))
+			img.at(x, y + 1) += (1.f - dx) * dy * intensity;
+		if (checkCoords(x + 1, y + 1))
+			img.at(x + 1, y + 1) += dx * dy * intensity;
+	}
+
+	static void RasterGeometry(Arr2dView<float>& img, SCompareResultsDesc::EGeometryType geometryType, const double2* coords, const float* values, size_t objectCount, float multiplier, const double2& pixelOrigin, float invPixelSize)
+	{
+		switch (geometryType)
+		{
+		case SCompareResultsDesc::Lines:
+			for (size_t i = 0; i < objectCount; ++i)
+			{
+				const float2 p0(coords[i * 2] - pixelOrigin);
+				const float2 p1(coords[i * 2 + 1] - pixelOrigin);
+				RasterLine(img, p0 * invPixelSize, p1 * invPixelSize, values[i] * multiplier);
+			}
+			break;
+		case SCompareResultsDesc::Points:
+			for (size_t i = 0; i < objectCount; ++i)
+			{
+				const float2 p(coords[i] - pixelOrigin);
+				RasterPoint(img, p * invPixelSize, values[i] * multiplier);
+			}
+			break;
+		default:
+			throw std::runtime_error("CompareResults: unsupported geometry type");
 		}
 	}
 
@@ -209,11 +255,13 @@ namespace psta
 		const float pixelSizeMeters = desc.Resolution;
 		const float invPixelSizeMeters = 1.0f / desc.Resolution;
 
+		const unsigned int pointsPerObject = (SCompareResultsDesc::Lines == desc.GeometryType) ? 2 : 1;
+
 		// Calculate bounding box
-		auto bb = CRectd::BBFromPoints((const double2*)desc.LineCoords1, desc.LineCount1 * 2);
+		auto bb = CRectd::BBFromPoints((const double2*)desc.LineCoords1, desc.LineCount1 * pointsPerObject);
 		if (desc.LineCoords2)
 		{
-			const auto bb2 = CRectd::BBFromPoints((const double2*)desc.LineCoords2, desc.LineCount2 * 2);
+			const auto bb2 = CRectd::BBFromPoints((const double2*)desc.LineCoords2, desc.LineCount2 * pointsPerObject);
 			bb.GrowToIncludeRect(bb2);
 		}
 		bb.Inflate(desc.BlurRadius * SIGMA_RANGE);
@@ -233,29 +281,17 @@ namespace psta
 
 		const double2 pixel_origin = bb.m_Min + double2(.5f, .5f) * pixelSizeMeters;
 
-		typedef std::pair<double2, double2> line_t;
-
 		if (SCompareResultsDesc::Normalized == desc.Mode)
 		{
 			{
-				auto raster_lines = [&](const line_t* lines, const float* intensities, size_t count, float multiplier)
-				{
-					for (size_t line_index = 0; line_index < count; ++line_index)
-					{
-						float2 p0(lines[line_index].first - pixel_origin);
-						float2 p1(lines[line_index].second - pixel_origin);
-						RasterLine(sdf_view, p0 * invPixelSizeMeters, p1 * invPixelSizeMeters, intensities[line_index] * multiplier);
-					}
-				};
-
-				raster_lines((line_t*)desc.LineCoords1, desc.Values1, desc.LineCount1, -1.f);
+				RasterGeometry(sdf_view, desc.GeometryType, (const double2*)desc.LineCoords1, desc.Values1, desc.LineCount1, -1.f, pixel_origin, invPixelSizeMeters);
 				if (desc.LineCoords2)
 				{
-					raster_lines((line_t*)desc.LineCoords2, desc.Values2, desc.LineCount2, 1.f);
+					RasterGeometry(sdf_view, desc.GeometryType, (const double2*)desc.LineCoords2, desc.Values2, desc.LineCount2, 1.f, pixel_origin, invPixelSizeMeters);
 				}
 				else
 				{
-					raster_lines((line_t*)desc.LineCoords1, desc.Values2, desc.LineCount1, 1.f);
+					RasterGeometry(sdf_view, desc.GeometryType, (const double2*)desc.LineCoords1, desc.Values2, desc.LineCount1, 1.f, pixel_origin, invPixelSizeMeters);
 				}
 
 				GaussianBlur(sdf_view, desc.BlurRadius * invPixelSizeMeters);
@@ -287,28 +323,18 @@ namespace psta
 				auto before_view = (Arr2dView<float>)before_raster;
 				before_view.Clear(0);
 
-				auto raster_lines = [&](const line_t* lines, const float* intensities, size_t count, float multiplier, Arr2dView<float>& raster_view)
-				{
-					for (size_t line_index = 0; line_index < count; ++line_index)
-					{
-						float2 p0(lines[line_index].first - pixel_origin);
-						float2 p1(lines[line_index].second - pixel_origin);
-						RasterLine(raster_view, p0 * invPixelSizeMeters, p1 * invPixelSizeMeters, intensities[line_index] * multiplier);
-					}
-				};
-
 				// Before
-				raster_lines((line_t*)desc.LineCoords1, desc.Values1, desc.LineCount1, 1.f, before_view);
+				RasterGeometry(before_view, desc.GeometryType, (const double2*)desc.LineCoords1, desc.Values1, desc.LineCount1, 1.f, pixel_origin, invPixelSizeMeters);
 				GaussianBlur(before_view, desc.BlurRadius * invPixelSizeMeters);
 
 				// After
 				if (desc.LineCoords2)
 				{
-					raster_lines((line_t*)desc.LineCoords2, desc.Values2, desc.LineCount2, 1.f, sdf_view);
+					RasterGeometry(sdf_view, desc.GeometryType, (const double2*)desc.LineCoords2, desc.Values2, desc.LineCount2, 1.f, pixel_origin, invPixelSizeMeters);
 				}
 				else
 				{
-					raster_lines((line_t*)desc.LineCoords1, desc.Values2, desc.LineCount1, 1.f, sdf_view);
+					RasterGeometry(sdf_view, desc.GeometryType, (const double2*)desc.LineCoords1, desc.Values2, desc.LineCount1, 1.f, pixel_origin, invPixelSizeMeters);
 				}
 				GaussianBlur(sdf_view, desc.BlurRadius * invPixelSizeMeters);
 

@@ -29,13 +29,20 @@ struct SCompareResultsDesc
 {
 	PSTA_DECL_STRUCT_NAME(SCompareResultsDesc)
 		
-	SCompareResultsDesc() : m_Version(VERSION) {}
+	SCompareResultsDesc() : m_Version(VERSION), GeometryType(Lines) {}
 
 	// Version
-	static const unsigned int VERSION = 4;
+	static const unsigned int VERSION = 5;
 	unsigned int m_Version;
 
-	unsigned int LineCount1;
+	enum EGeometryType : unsigned int
+	{
+		Lines = 0,     // 2 coordinate pairs per object
+		Points = 1,    // 1 coordinate pair per object
+	};
+	EGeometryType GeometryType;  // Geometry type of both data sets
+
+	unsigned int LineCount1;  // Object count (lines or points)
 	double* LineCoords1;
 	float* Values1;
 
