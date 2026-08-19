@@ -339,9 +339,15 @@ class OutputPage(BasePage):
 
 		vlayout.addSpacing(SEPARATOR_HEIGHT)
 
-		self._logScaleCheck = QCheckBox("Logarithmic colour scale (object output, 'all' comparison)")
+		self._logScaleCheck = QCheckBox("Logarithmic colour scale")
 		self.regProp("log_scale", WizProp(self._logScaleCheck, False))
 		vlayout.addWidget(self._logScaleCheck)
+
+		self._logScaleHint = QLabel(
+			"Recommended when a few large objects dominate the value range, which would\n"
+			"otherwise leave ordinary changes almost invisible.")
+		self._logScaleHint.setStyleSheet("color: gray;")
+		vlayout.addWidget(self._logScaleHint)
 
 		vlayout.addStretch()
 
@@ -354,5 +360,9 @@ class OutputPage(BasePage):
 		self._outputChecks['object_layer'].setEnabled(is_object)
 		self._outputChecks['ranges_polygons'].setEnabled(not is_object)
 		self._outputChecks['gradient_raster'].setEnabled(not is_object)
-		# Log scale only affects the object output in 'all' comparison mode.
-		self._logScaleCheck.setEnabled(is_object and self.wizard().prop('filter_mode') == 'all')
+		# For the object output the log scale only makes sense in 'all' comparison mode
+		# (that is where new/removed objects create the outliers); the gradient raster
+		# benefits from it in every mode.
+		log_applies = (is_object and self.wizard().prop('filter_mode') == 'all') or not is_object
+		self._logScaleCheck.setEnabled(log_applies)
+		self._logScaleHint.setEnabled(log_applies)
