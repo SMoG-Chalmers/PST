@@ -264,8 +264,9 @@ class QGISModel(object):
 				for feature in layer.getFeatures(request):
 					yield tuple(feature[field_index] for field_index in field_indices)
 
-	def readObjects(self, table_name, value_column, id_column=None):
-		""" Yields (geometry, value, id_value) for each feature with a non-empty geometry.
+	def readObjects(self, table_name, value_column, id_column=None, with_fid=False):
+		""" Yields (geometry, value, id_value) for each feature with a non-empty geometry,
+		    or (geometry, value, id_value, feature_id) when with_fid is set.
 		    'geometry' is a cloned QgsGeometry (safe to keep after iteration). 'id_value'
 		    is None when id_column is not given. Works for point, line and polygon layers. """
 		layer = self._layerFromName(table_name)
@@ -275,7 +276,11 @@ class QGISModel(object):
 			g = feature.geometry()
 			if g is None or g.isEmpty():
 				continue
-			yield (QgsGeometry(g), feature[value_index], feature[id_index] if id_index is not None else None)
+			id_value = feature[id_index] if id_index is not None else None
+			if with_fid:
+				yield (QgsGeometry(g), feature[value_index], id_value, feature.id())
+			else:
+				yield (QgsGeometry(g), feature[value_index], id_value)
 
 	def readValues(self, table_name, column_name, rowids, out_values, progress=None):
 		num_rows = rowids.size()

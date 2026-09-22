@@ -19,7 +19,7 @@ You should have received a copy of the GNU Lesser General Public License
 along with PST. If not, see <http://www.gnu.org/licenses/>.
 """
 
-from qgis.core import QgsProject, QgsRasterShader, QgsColorRampShader, QgsSingleBandPseudoColorRenderer, QgsGeometry, QgsPointXY
+from qgis.core import QgsProject, QgsRasterShader, QgsColorRampShader, QgsSingleBandPseudoColorRenderer, QgsGeometry, QgsPointXY, QgsCoordinateReferenceSystem, QgsMessageLog, Qgis
 from qgis.PyQt.QtGui import QColor
 
 from builtins import object, range
@@ -124,28 +124,64 @@ class PointRegistry(object):
 		return self.add(x, y) if pid is None else pid
 
 
+def RangeFractions(log_scale):
+	""" Class boundaries as fractions of the largest absolute value, shared by the
+	    gradient raster and the range polygons so the two outputs classify identically. """
+	return LOG_RASTER_RANGES if log_scale else RANGES
+
+def RangeLabels(fractions):
+	""" Legend labels for the classes defined by 'fractions', negative classes first
+	    (strongest negative to weakest), then positive (weakest to strongest). """
+	def fmt(f):
+		return "%.2f" % f if f >= 0.01 else "%.3g" % f
+	labels = ["%s - %s (-)" % (fmt(fractions[-i-2]), fmt(fractions[-i-1])) for i in range(len(fractions) - 1)]
+	labels += ["%s - %s (+)" % (fmt(fractions[i]), fmt(fractions[i+1])) for i in range(len(fractions) - 1)]
+	return labels
+
+def OutputName(base, props):
+	""" Output layer name carrying the compared attribute(s), so several comparisons
+	    in one project stay distinguishable: 'Object comparison_AB5k', or
+	    'Object comparison_AB5k vs AI5k' when the two columns differ. """
+	col1, col2 = props['in_column1'], props['in_column2']
+	return "%s_%s" % (base, col1 if col1 == col2 else "%s vs %s" % (col1, col2))
+
+def WarnIfDuplicateIds(table, id_column, duplicate_count):
+	""" ID matching pairs one object per ID value; repeated IDs are matched by their
+	    first occurrence only, which the user should know about. """
+	if duplicate_count > 0:
+		QgsMessageLog.logMessage(
+			"Compare Results: %d objects in '%s' share an ID value in column '%s' with another object; "
+			"only the first object per ID value is matched." % (duplicate_count, table, id_column),
+			'PST', Qgis.Warning)
+
 def SetGradientRasterShader(layer, valueRange, log_scale=False):
-	""" Colours the gradient raster. 'log_scale' switches the band boundaries from
-	    linearly to logarithmically spaced fractions of the value range, which keeps
-	    ordinary changes visible when a few extreme objects dominate the range. """
-	fractions = LOG_RASTER_RANGES if log_scale else RANGES
+	""" Colours the gradient raster with the same discrete classes as the range
+	    polygons, so the two outputs of an area comparison look alike. 'log_scale'
+	    switches the class boundaries from linearly to logarithmically spaced fractions
+	    of the value range, which keeps ordinary changes visible when a few extreme
+	    objects dominate the range.
+
+	    A discrete ramp gives each cell the colour of the class its value falls in; an
+	    interpolated ramp would instead fade the weakest class from transparent to its
+	    colour and make it nearly invisible while the polygons draw it solid. """
+	fractions = RangeFractions(log_scale)
+	labels = RangeLabels(fractions)
+	n = len(fractions) - 1
 	posRange = max(0, valueRange[1])
 	negRange = min(0, valueRange[0])
 	shader = QgsRasterShader()
 	fnc = QgsColorRampShader()
-	fnc.setColorRampType(QgsColorRampShader.Interpolated)
+	fnc.setColorRampType(QgsColorRampShader.Discrete)
+	# Discrete: an item colours every value up to its own value (and above the previous
+	# item's), so items carry the UPPER boundary of their class.
 	ramp_items = []
 	if negRange < 0:
-		for i in range(len(fractions) - 1):
-			ramp_items.append(QgsColorRampShader.ColorRampItem(fractions[-i-1] * negRange, QColor(*tupleFromHtmlColor(COLORS[i]))))
-	if negRange < 0 and posRange > 0:
-		ramp_items.append(QgsColorRampShader.ColorRampItem(fractions[0] * negRange, QColor(255, 255, 255, 0)))
-		ramp_items.append(QgsColorRampShader.ColorRampItem(fractions[0] * posRange, QColor(255, 255, 255, 0)))
-	else:
-		ramp_items.append(QgsColorRampShader.ColorRampItem(0, QColor(255, 255, 255, 0)))
+		for i in range(n):
+			ramp_items.append(QgsColorRampShader.ColorRampItem(fractions[n-1-i] * negRange, QColor(*tupleFromHtmlColor(COLORS[i])), labels[i]))
+	ramp_items.append(QgsColorRampShader.ColorRampItem(fractions[0] * posRange if posRange > 0 else 0, QColor(255, 255, 255, 0), ""))
 	if posRange > 0:
-		for i in range(len(fractions) - 1):
-			ramp_items.append(QgsColorRampShader.ColorRampItem(fractions[i+1] * posRange, QColor(*tupleFromHtmlColor(COLORS[i + len(fractions) - 1]))))
+		for i in range(n):
+			ramp_items.append(QgsColorRampShader.ColorRampItem(fractions[i+1] * posRange, QColor(*tupleFromHtmlColor(COLORS[i + n])), labels[i + n]))
 	fnc.setColorRampItemList(ramp_items)
 	shader.setRasterShaderFunction(fnc)
 	renderer = QgsSingleBandPseudoColorRenderer(layer.dataProvider(), 1, shader)
@@ -296,10 +332,14 @@ class CompareResultsAnalysis(BaseAnalysis):
 				polygonData2 = polygon_data_arrays[1],
 				progress_callback = pstalgo.CreateAnalysisDelegateCallbackWrapper(progress))
 
+			log_scale = props.get('log_scale', False)
+			fractions = RangeFractions(log_scale)
+			labels = RangeLabels(fractions)
+
 			if createRangesPolygons:
 
-				ranges = [(-RANGES[-i-1], -RANGES[-i-2]) for i in range(len(RANGES) - 1)]
-				ranges += [(RANGES[i], RANGES[i+1]) for i in range(len(RANGES) - 1)]
+				ranges = [(-fractions[-i-1], -fractions[-i-2]) for i in range(len(fractions) - 1)]
+				ranges += [(fractions[i], fractions[i+1]) for i in range(len(fractions) - 1)]
 
 				progress.setCurrentTask(Tasks.POLYGONS)
 				(polygonCountPerRange, polygonData, polygonCoords, result2) = pstalgo.RasterToPolygons(
@@ -345,7 +385,7 @@ class CompareResultsAnalysis(BaseAnalysis):
 				# --- WRITE_---
 				progress.setCurrentTask(Tasks.WRITE)
 				tableId = self._model.createTable(
-					'Polygons',
+					OutputName('Area comparison polygons', props),
 					model.coordinateReferenceSystem(props['in_table1']),
 					columns,
 					polygon_gen(totalPolygonCount, polygonData, polygonCoords),
@@ -353,17 +393,21 @@ class CompareResultsAnalysis(BaseAnalysis):
 					progress,
 					geo_type=GeometryType.POLYGON)
 
-				# Create thematic
-				ranges = [(RANGE_TEXTS[i], tupleFromHtmlColor(COLORS[i]), i) for i in range(len(RANGE_TEXTS))]
-				model.makeThematic(tableId, 'category', ranges)
+				# Create thematic. Listed strongest positive first so the legend reads red at
+				# the top and blue at the bottom, like the raster's.
+				ranges = [(labels[i], tupleFromHtmlColor(COLORS[i]), i) for i in range(len(labels))]
+				model.makeThematic(tableId, 'category', list(reversed(ranges)))
 
 			if createGradientRaster:
-				rasterLayer = CreateRasterFromPstaHandle(gradientRaster)
+				# The raster must carry the input layer's CRS; without it the layer would be
+				# given the project CRS and land in the wrong place whenever the two differ.
+				inputCrs = QgsCoordinateReferenceSystem(model.coordinateReferenceSystem(props['in_table1']))
+				rasterLayer = CreateRasterFromPstaHandle(gradientRaster, crs=inputCrs if inputCrs.isValid() else None)
 				SetGradientRasterShader(
 					rasterLayer,
 					(rasterMin, rasterMax) if compareMode == pstalgo.CompareResultsMode.RELATIVE_PERCENT else (-1, 1),
-					log_scale=props.get('log_scale', False))
-				rasterLayer.setName('Gradient Raster')
+					log_scale=log_scale)
+				rasterLayer.setName(OutputName('Area comparison raster', props))
 				QgsProject.instance().addMapLayer(rasterLayer)
 
 		finally:
@@ -419,57 +463,70 @@ class CompareResultsAnalysis(BaseAnalysis):
 			return tuple(sorted(ids))
 
 		def read_map(table, value_col, id_col, first_table):
+			# key -> (geometry, value, feature id, ID column value); the first object per
+			# key wins, so the user is told when an ID value is shared by several objects.
 			m = {}
-			for geom, val, idval in self._model.readObjects(table, value_col, id_col):
+			duplicates = 0
+			for geom, val, idval, fid in self._model.readObjects(table, value_col, id_col, with_fid=True):
 				k = idval if filter_mode == 'id' else geom_key(geom, first_table)
-				if k not in m:
-					m[k] = (geom, val)
+				if k in m:
+					duplicates += 1
+				else:
+					m[k] = (geom, val, fid, idval)
+			if filter_mode == 'id':
+				WarnIfDuplicateIds(table, id_col, duplicates)
 			return m
 
 		mapA = read_map(table1, col1, id1, True)
 		mapB = read_map(table2, col2, id2, False)
 
-		# Build the list of (geometry, diff) features
+		# Build the features: (geometry, diff, value A, value B, fid A, fid B, ID value)
+		def value(obj):
+			return (obj[1] or 0.0) if obj is not None else None
+
 		features = []
-		if filter_mode == 'all':
-			for k in set(mapA.keys()) | set(mapB.keys()):
-				a = mapA.get(k)
-				b = mapB.get(k)
-				va = a[1] if a is not None else 0.0
-				vb = b[1] if b is not None else 0.0
-				geom = b[0] if b is not None else a[0]
-				features.append((geom, (vb or 0.0) - (va or 0.0)))
-		else:
-			for k in set(mapA.keys()) & set(mapB.keys()):
-				a = mapA[k]
-				b = mapB[k]
-				features.append((b[0], (b[1] or 0.0) - (a[1] or 0.0)))
+		keys = set(mapA.keys()) | set(mapB.keys()) if filter_mode == 'all' else set(mapA.keys()) & set(mapB.keys())
+		for k in keys:
+			a = mapA.get(k)
+			b = mapB.get(k)
+			va, vb = value(a), value(b)
+			present = b if b is not None else a
+			features.append((present[0], (vb or 0.0) - (va or 0.0), va, vb,
+			                 a[2] if a is not None else None, b[2] if b is not None else None,
+			                 present[3]))
 
 		if not features:
 			raise AnalysisException(
 				"No objects to compare between '%s' and '%s'. "
 				"Try a different matching mode." % (table1, table2))
 
-		# Write the vector layer (same geometry type as the input)
+		# Write the vector layer (same geometry type as the input). Besides the diff it
+		# carries both values and the source feature ids, so a row can be traced back
+		# to the objects it was computed from; 'id' is only a running number.
+		def column_gen(index):
+			for f in features:
+				yield f[index]
+
 		def id_gen():
 			for i in range(len(features)):
 				yield i + 1
 
-		def diff_gen():
-			for _, d in features:
-				yield d
-
-		def geom_gen():
-			for g, _ in features:
-				yield g
-
 		progress.setCurrentTask(Tasks.WRITE)
-		columns = [('id', 'integer', id_gen()), ('diff', 'float', diff_gen())]
+		columns = [
+			('id', 'integer', id_gen()),
+			('diff', 'float', column_gen(1)),
+			('value_a', 'float', column_gen(2)),
+			('value_b', 'float', column_gen(3)),
+			('fid_a', 'integer', column_gen(4)),
+			('fid_b', 'integer', column_gen(5)),
+		]
+		if filter_mode == 'id':
+			columns.append(('match_id', 'string', (None if v is None else str(v) for v in column_gen(6))))
 		tableId = self._model.createTable(
-			'Object Comparison',
+			OutputName('Object comparison', props),
 			self._model.coordinateReferenceSystem(table1),
 			columns,
-			geom_gen(),
+			column_gen(0),
 			len(features),
 			progress,
 			geo_type=geomType)
@@ -478,7 +535,7 @@ class CompareResultsAnalysis(BaseAnalysis):
 		# Boundaries are the RANGES fractions scaled by the largest absolute diff, so
 		# +X and -X get equally strong colour. The innermost +/- 0.01 band is left
 		# unclassified (no change), matching the raster/polygon output.
-		maxAbs = max((abs(d) for _, d in features), default=0.0)
+		maxAbs = max((abs(f[1]) for f in features), default=0.0)
 		if maxAbs > 0:
 			# Logarithmic colour scale is offered only for the 'all' comparison, where a
 			# few outliers (new/removed objects) otherwise flatten the linear scale.
@@ -493,7 +550,8 @@ class CompareResultsAnalysis(BaseAnalysis):
 				lower = -1e30 if i == 0 else lo * maxAbs
 				upper = 1e30 if i == last else hi * maxAbs
 				obj_ranges.append((lower, upper, tupleFromHtmlColor(COLORS[i]), labels[i]))
-			self._model.makeGraduated(tableId, 'diff', obj_ranges)
+			# Strongest positive first, so the legend reads red at the top like the raster's
+			self._model.makeGraduated(tableId, 'diff', list(reversed(obj_ranges)))
 
 	def _readObjectArrays(self, geomType, props, filter_mode, separateTables):
 		""" Reads point or polygon objects and packs them into the flat arrays pstalgo
@@ -713,7 +771,17 @@ class CompareResultsAnalysis(BaseAnalysis):
 				"ID matching requires an ID column to be selected for both tables.")
 		ids0 = list(self._model.values(table0, id_col0, rowids_per_table[0]))
 		ids1 = list(self._model.values(table1, id_col1, rowids_per_table[1]))
-		common = set(ids0) & set(ids1)
-		keep0 = [i for i, v in enumerate(ids0) if v in common]
-		keep1 = [i for i, v in enumerate(ids1) if v in common]
+		# One line per ID value and table: keeping every line that merely shares its ID
+		# with a matched one would let lines that exist in only one table through.
+		first0 = {}
+		for i, v in enumerate(ids0):
+			first0.setdefault(v, i)
+		first1 = {}
+		for i, v in enumerate(ids1):
+			first1.setdefault(v, i)
+		WarnIfDuplicateIds(table0, id_col0, len(ids0) - len(first0))
+		WarnIfDuplicateIds(table1, id_col1, len(ids1) - len(first1))
+		common = first0.keys() & first1.keys()
+		keep0 = sorted(first0[v] for v in common)
+		keep1 = sorted(first1[v] for v in common)
 		return keep0, keep1

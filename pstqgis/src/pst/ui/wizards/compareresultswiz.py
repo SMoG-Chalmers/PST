@@ -94,14 +94,14 @@ class InputPage(BasePage):
 
 		hlayout = QHBoxLayout()
 		hlayout.addSpacing(INDENT_WIDTH)
-		self._areaMethodRadio = QRadioButton("Area comparison (raster)")
+		self._areaMethodRadio = QRadioButton("Area-based comparison (raster, vector)")
 		hlayout.addWidget(self._areaMethodRadio)
 		hlayout.addStretch()
 		vlayout.addLayout(hlayout)
 
 		hlayout = QHBoxLayout()
 		hlayout.addSpacing(INDENT_WIDTH)
-		self._objectMethodRadio = QRadioButton("Object comparison (vector)")
+		self._objectMethodRadio = QRadioButton("Object-based comparison (vector)")
 		hlayout.addWidget(self._objectMethodRadio)
 		hlayout.addStretch()
 		vlayout.addLayout(hlayout)
