@@ -19,7 +19,7 @@ You should have received a copy of the GNU Lesser General Public License
 along with PST. If not, see <http://www.gnu.org/licenses/>.
 """
 
-from qgis.PyQt.QtWidgets import QLabel, QComboBox, QLineEdit, QMessageBox, QVBoxLayout
+from qgis.PyQt.QtWidgets import QLabel, QComboBox, QDoubleSpinBox, QLineEdit, QMessageBox, QVBoxLayout
 from ..wizard import BaseWiz, BasePage, WizProp, WizPropCombo
 from ..pages import FinishPage, ProgressPage, ReadyPage, AddRadiusProperties, RadiusType
 from ..widgets import PropertySheetWidget, WidgetEnableCheckBox
@@ -131,7 +131,15 @@ DESTINATION_MODE_ITEMS = [
 ROUTE_CHOICE_ITEMS = [
 	("Minimum walking distance", "walking"),
 	("Least angular",            "angular"),
+	("Minimum weighted distance (line attribute)", "weights"),
 ]
+
+WEIGHT_DIRECTION_ITEMS = [
+	("Higher value increases cost", "increase"),
+	("Higher value decreases cost", "decrease"),
+]
+
+DEFAULT_WEIGHT_MAX_FACTOR = 2.0
 
 RADIUS_TYPES = [RadiusType.STRAIGHT, RadiusType.WALKING, RadiusType.ANGULAR]
 
@@ -157,6 +165,26 @@ class DistanceSettingsPage(BasePage):
 			self._routeChoiceCombo.addItem(item[0], item[1])
 		prop_sheet.add(QLabel("Route choice"), self._routeChoiceCombo)
 		self.regProp("route_choice", WizPropCombo(self._routeChoiceCombo, ROUTE_CHOICE_ITEMS[0][1]))
+		self._routeChoiceCombo.currentIndexChanged.connect(self.updateWeightWidgets)
+
+		# Line attribute weighting (only used with weighted route choice)
+		prop_sheet.newSection("Line attribute weighting")
+		self._weightAttributeCombo = QComboBox()
+		prop_sheet.add(QLabel("Line attribute"), self._weightAttributeCombo)
+		self.regProp("dw_attribute", WizProp(self._weightAttributeCombo, ""))
+		self._weightDirectionCombo = QComboBox()
+		for item in WEIGHT_DIRECTION_ITEMS:
+			self._weightDirectionCombo.addItem(item[0], item[1])
+		prop_sheet.add(QLabel("Effect"), self._weightDirectionCombo)
+		self.regProp("dw_direction", WizPropCombo(self._weightDirectionCombo, WEIGHT_DIRECTION_ITEMS[0][1]))
+		self._weightMaxFactorSpin = QDoubleSpinBox()
+		self._weightMaxFactorSpin.setRange(1, 1000)
+		self._weightMaxFactorSpin.setDecimals(2)
+		self._weightMaxFactorSpin.setSingleStep(0.1)
+		self._weightMaxFactorSpin.setValue(DEFAULT_WEIGHT_MAX_FACTOR)
+		prop_sheet.add(QLabel("Highest cost factor"), self._weightMaxFactorSpin, QLabel("x distance"))
+		self.regProp("dw_max_factor", WizProp(self._weightMaxFactorSpin, DEFAULT_WEIGHT_MAX_FACTOR))
+		self._weightWidgets = [self._weightAttributeCombo, self._weightDirectionCombo, self._weightMaxFactorSpin]
 
 		# Radius
 		prop_sheet.newSection("Radius")
@@ -175,8 +203,33 @@ class DistanceSettingsPage(BasePage):
 		vlayout.addStretch(1)
 		self.setLayout(vlayout)
 
+	def initializePage(self):
+		network_table = self.wizard().prop("in_network")
+		selected = self._weightAttributeCombo.currentText()
+		self._weightAttributeCombo.clear()
+		if network_table:
+			for column_name in self.model().columnNames(network_table):
+				try:
+					column_type = self.model().columnType(network_table, column_name)
+				except Exception:
+					continue  # Unsupported column types (dates etc) can't be weights
+				if column_type in ["integer", "double"]:
+					self._weightAttributeCombo.addItem(column_name)
+		index = self._weightAttributeCombo.findText(selected)
+		if index >= 0:
+			self._weightAttributeCombo.setCurrentIndex(index)
+		self.updateWeightWidgets()
+
+	def updateWeightWidgets(self, *args):
+		enabled = (self._routeChoiceCombo.currentData() == "weights")
+		for widget in self._weightWidgets:
+			widget.setEnabled(enabled)
+
 	def validatePage(self):
 		p = self.wizard().prop
+		if p("route_choice") == "weights" and not p("dw_attribute"):
+			QMessageBox.information(self, "Missing line attribute", "Please select a numeric line attribute for weighted route choice.")
+			return False
 		if p("column_suffix_enabled"):
 			column_suffix = p("column_suffix")
 			if not column_suffix:

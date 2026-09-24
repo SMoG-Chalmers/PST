@@ -21,6 +21,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 
 from builtins import object
 import ctypes
+from qgis.PyQt.QtCore import QVariant
 from .base import BaseAnalysis
 from .columnnaming import ColName, GenColName
 from .memory import stack_allocator
@@ -51,7 +52,9 @@ class ODBetweennessAnalysis(BaseAnalysis):
 		distance_type = {
 			"walking" : pstalgo.DistanceType.WALKING,
 			"angular" : pstalgo.DistanceType.ANGULAR,
+			"weights" : pstalgo.DistanceType.WEIGHTS,
 		}[props["route_choice"]]
+		use_weights = (distance_type == pstalgo.DistanceType.WEIGHTS)
 
 		# Radii
 		radii_list = RadiiFromSettings(pstalgo, props).split()  # Only applicable in non-weight mode
@@ -79,11 +82,14 @@ class ODBetweennessAnalysis(BaseAnalysis):
 			READ_DESTINATION_WEIGHTS = 4
 			ANALYSIS = 5
 			WRITE_RESULTS = 6
+			READ_LINE_WEIGHTS = 7
 		progress = MultiTaskProgressDelegate(delegate)
 		progress.addTask(Tasks.READ_ORIGIN_POINTS, 1, None)
 		progress.addTask(Tasks.READ_ORIGIN_WEIGHTS, 1, None)
 		progress.addTask(Tasks.BUILD_GRAPH, 3, None)
 		progress.addTask(Tasks.READ_DESTINATION_WEIGHTS, 1, None)
+		if use_weights:
+			progress.addTask(Tasks.READ_LINE_WEIGHTS, 1, "Reading line weights")
 		progress.addTask(Tasks.ANALYSIS, 10*analysis_count, None)
 		progress.addTask(Tasks.WRITE_RESULTS, 1, None)
 
@@ -125,6 +131,18 @@ class ODBetweennessAnalysis(BaseAnalysis):
 			else:
 				destination_weights = None
 
+			# Line cost factors
+			line_cost_factors = None
+			missing_weight_count = 0
+			if use_weights:
+				progress.setCurrentTask(Tasks.READ_LINE_WEIGHTS)
+				weight_attribute = props['dw_attribute']
+				values = LineWeightValueGen(model, network_table, line_rows, weight_attribute)
+				(line_cost_factors, missing_weight_count) = pstalgo.LineCostFactorsFromValues(
+					values,
+					increases_cost = (props['dw_direction'] == 'increase'),
+					max_factor = props['dw_max_factor'])
+
 			output_count = line_rows.size()
 			output_columns = []
 
@@ -143,8 +161,9 @@ class ODBetweennessAnalysis(BaseAnalysis):
 					destination_mode = destination_mode, 
 					distance_type = distance_type, 
 					radius = radii, 
-					progress_callback = pstalgo.CreateAnalysisDelegateCallbackWrapper(analysis_progress), 
-					out_scores = scores)
+					progress_callback = pstalgo.CreateAnalysisDelegateCallbackWrapper(analysis_progress),
+					out_scores = scores,
+					line_cost_factors = line_cost_factors)
 				output_columns.append((GenerateColumnName(distance_type=distance_type, radii=radii, suffix=column_suffix), 'float', scores.values()))
 				analysis_progress.nextTask()
 
@@ -157,5 +176,19 @@ class ODBetweennessAnalysis(BaseAnalysis):
 			if graph_handle:
 				pstalgo.FreeGraph(graph_handle)
 
-		delegate.setStatus("Origin-Destination Betweenness done")
+		status = "Origin-Destination Betweenness done"
+		if missing_weight_count:
+			status += " (%d lines without a value in '%s' were given cost factor 1)" % (missing_weight_count, props['dw_attribute'])
+		delegate.setStatus(status)
 		delegate.setProgress(1)
+
+def LineWeightValueGen(model, table, rowids, column_name):
+	""" Yields one float per line, or None for missing values """
+	for value in model.values(table, [column_name], rowids):
+		if value is None or (isinstance(value, QVariant) and value.isNull()):
+			yield None
+			continue
+		try:
+			yield float(value)
+		except (TypeError, ValueError):
+			raise Exception("Line weight attribute '%s' contains a non-numeric value: %s" % (column_name, str(value)))

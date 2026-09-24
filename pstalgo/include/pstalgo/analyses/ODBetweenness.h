@@ -28,7 +28,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 struct SPSTAODBetweenness
 {
 	// Version
-	static const unsigned int VERSION = 1;
+	static const unsigned int VERSION = 2;
 	unsigned int m_Version = VERSION;
 
 	// Graph
@@ -52,6 +52,14 @@ struct SPSTAODBetweenness
 
 	// Distance measurement
 	unsigned char m_DistanceType = EPSTADistanceType_Walking;  // enum EPSTADistanceType
+
+	// Line cost factors, required when m_DistanceType is EPSTADistanceType_Weights.
+	// One non-negative factor per line in m_Graph. The cost of moving along a line
+	// is factor * distance along the line, i.e. the factor is cost per meter.
+	// Distances from origins and destinations to their closest line cost 1 per meter.
+	// Radii are still measured in their own units (walking radius in meters etc).
+	const float* m_LineCostFactors = nullptr;
+	unsigned int m_LineCostFactorCount = 0;
 
 	// Radius
 	SPSTARadii m_Radius;

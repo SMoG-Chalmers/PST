@@ -31,7 +31,7 @@ from .createsegmentmap import CreateSegmentMap
 from .log import ErrorLevel, FormatLogMessage, RegisterLogCallback, UnregisterLogCallback
 from .networkintegration import NetworkIntegration
 from .angularchoice import AngularChoice, AngularChoiceNormalize, AngularChoiceSyntaxNormalize
-from .odbetweenness import ODBetweenness, ODBDestinationMode
+from .odbetweenness import ODBetweenness, ODBDestinationMode, LineCostFactorsFromValues
 from .raster import RasterFormat, GetRasterData
 from .reach import Reach
 from .segmentbetweenness import SegmentBetweenness, BetweennessNormalize, BetweennessSyntaxNormalize

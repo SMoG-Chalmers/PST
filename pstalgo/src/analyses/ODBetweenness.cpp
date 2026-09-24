@@ -20,6 +20,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include <atomic>
+#include <cmath>
 #include <future>
 #include <memory>
 #include <queue>
@@ -69,6 +70,26 @@ namespace psta
 				throw std::runtime_error("SPSTAODBetweenness::m_DestinationCount does not match graph point count");
 			if (desc.m_OutputCount != Graph().getLineCount())
 				throw std::runtime_error("SPSTAODBetweenness::m_OutputCount does not match graph line count");
+			switch (DistanceType())
+			{
+			case EPSTADistanceType_Walking:
+			case EPSTADistanceType_Angular:
+				break;
+			case EPSTADistanceType_Weights:
+				if (!desc.m_LineCostFactors)
+					throw std::runtime_error("SPSTAODBetweenness::m_LineCostFactors is required for weights distance type");
+				if (desc.m_LineCostFactorCount != Graph().getLineCount())
+					throw std::runtime_error("SPSTAODBetweenness::m_LineCostFactorCount does not match graph line count");
+				for (unsigned int i = 0; i < desc.m_LineCostFactorCount; ++i)
+				{
+					// Negative costs would break the shortest path search
+					if (!std::isfinite(desc.m_LineCostFactors[i]) || desc.m_LineCostFactors[i] < 0.f)
+						throw std::runtime_error("SPSTAODBetweenness::m_LineCostFactors must be finite and non-negative");
+				}
+				break;
+			default:
+				throw std::runtime_error("Unsupported distance type for OD Betweenness");
+			}
 		}
 
 		float Progress() const { return (float)m_OriginProcessedCounter / m_Desc.m_OriginCount; }
@@ -86,6 +107,12 @@ namespace psta
 		EPSTADistanceType DistanceType() const { return (EPSTADistanceType)m_Desc.m_DistanceType; }
 		
 		const SPSTARadii& Radius() const { return m_Desc.m_Radius; }
+
+		float GetLineCostFactor(int line_index) const
+		{
+			ASSERT(m_Desc.m_LineCostFactors && (unsigned int)line_index < m_Desc.m_LineCostFactorCount);
+			return m_Desc.m_LineCostFactors[line_index];
+		}
 
 		bool FetchNextOrigin(COORDS& coords, float& weight, int& category)
 		{
@@ -147,8 +174,9 @@ namespace psta
 			unsigned int m_Steps;
 			float m_Walking;
 			float m_Angle;
-			void SetZero() { m_Steps = 0;  m_Walking = m_Angle = 0; }
-			void SetMax() { m_Steps = 0xFFFFFFFF;  m_Walking = m_Angle = std::numeric_limits<float>::max(); }
+			float m_Weight;  // Walking distance scaled by line cost factors (weights distance type only)
+			void SetZero() { m_Steps = 0;  m_Walking = m_Angle = m_Weight = 0; }
+			void SetMax() { m_Steps = 0xFFFFFFFF;  m_Walking = m_Angle = m_Weight = std::numeric_limits<float>::max(); }
 		};
 
 		struct SReachedPoint
@@ -242,6 +270,7 @@ namespace psta
 			return;
 
 		const bool we_care_about_angles = (EPSTADistanceType_Angular == m_Ctx.DistanceType() || m_Ctx.Radius().HasAngular());
+		const bool use_weights = (EPSTADistanceType_Weights == m_Ctx.DistanceType());
 
 		// Clear queue, just to make sure
 		ASSERT(m_Queue.empty());
@@ -254,6 +283,7 @@ namespace psta
 		step.m_PrevTrace = -1;
 		step.m_AccDist.SetZero();
 		step.m_AccDist.m_Walking = dist_from_line;
+		step.m_AccDist.m_Weight = dist_from_line;
 		if (dist_from_line*dist_from_line <= m_Ctx.Radius().StraightSqr())
 		{
 			if (we_care_about_angles)
@@ -339,7 +369,10 @@ namespace psta
 
 				next_step.m_AccDist = step.m_AccDist;
 				next_step.m_AccDist.m_Steps += 1;
-				next_step.m_AccDist.m_Walking += fabsf(from_line_pos - linecrossing.linePos);
+				const float walked_along_line = fabsf(from_line_pos - linecrossing.linePos);
+				next_step.m_AccDist.m_Walking += walked_along_line;
+				if (use_weights)
+					next_step.m_AccDist.m_Weight += m_Ctx.GetLineCostFactor(step.m_Line) * walked_along_line;
 
 				if (!IsWithinRadius(next_step.m_AccDist))
 					continue;
@@ -391,8 +424,13 @@ namespace psta
 				if (we_care_about_angles && step.IsForwards() != (point.linePos > from_line_pos))
 					continue;
 				next_step.m_AccDist = step.m_AccDist;
-				if (EPSTADistanceType_Walking == m_Ctx.DistanceType())
-					next_step.m_AccDist.m_Walking += fabsf(point.linePos - from_line_pos) + point.distFromLine;
+				if (EPSTADistanceType_Walking == m_Ctx.DistanceType() || use_weights)
+				{
+					const float walked_along_line = fabsf(point.linePos - from_line_pos);
+					next_step.m_AccDist.m_Walking += walked_along_line + point.distFromLine;
+					if (use_weights)
+						next_step.m_AccDist.m_Weight += m_Ctx.GetLineCostFactor(step.m_Line) * walked_along_line + point.distFromLine;
+				}
 				if (!IsWithinRadius(next_step.m_AccDist))
 					continue;
 				if (-1 != m_ShortestPointDists[point_index])
@@ -446,8 +484,14 @@ namespace psta
 
 	void CODBetweennessWorker::SStep::UpdateDistModeDist(EPSTADistanceType dist_type)
 	{
-		ASSERT(EPSTADistanceType_Angular == dist_type || EPSTADistanceType_Walking == dist_type);
-		m_DistModeDist = (EPSTADistanceType_Angular == dist_type) ? m_AccDist.m_Angle : m_AccDist.m_Walking;
+		switch (dist_type)
+		{
+		case EPSTADistanceType_Angular: m_DistModeDist = m_AccDist.m_Angle; break;
+		case EPSTADistanceType_Weights: m_DistModeDist = m_AccDist.m_Weight; break;
+		default:
+			ASSERT(EPSTADistanceType_Walking == dist_type);
+			m_DistModeDist = m_AccDist.m_Walking;
+		}
 	}
 
 	void CODBetweennessWorker::QueueStep(SStep& step)
@@ -478,6 +522,11 @@ namespace psta
 			if (dist.m_Walking > m_ShortestCrossingDists[crossing_index].m_Dist)
 				return false;
 			m_ShortestCrossingDists[crossing_index].m_Dist = dist.m_Walking;
+			break;
+		case EPSTADistanceType_Weights:
+			if (dist.m_Weight > m_ShortestCrossingDists[crossing_index].m_Dist)
+				return false;
+			m_ShortestCrossingDists[crossing_index].m_Dist = dist.m_Weight;
 			break;
 		default:
 			ASSERT(false && "Unsupported distance type");
