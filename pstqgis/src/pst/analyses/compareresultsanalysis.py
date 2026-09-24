@@ -145,6 +145,16 @@ def OutputName(base, props):
 	col1, col2 = props['in_column1'], props['in_column2']
 	return "%s_%s" % (base, col1 if col1 == col2 else "%s vs %s" % (col1, col2))
 
+def FormatIdValue(value):
+	""" ID column value as text for the output layer. Whole numbers stored as decimals
+	    (common in shapefiles, where an integer ID column is often read as a double)
+	    are written without the trailing '.0'. NULL stays NULL. """
+	if value is None or (hasattr(value, 'isNull') and value.isNull()):
+		return None
+	if isinstance(value, float) and value.is_integer():
+		return str(int(value))
+	return str(value)
+
 def WarnIfDuplicateIds(table, id_column, duplicate_count):
 	""" ID matching pairs one object per ID value; repeated IDs are matched by their
 	    first occurrence only, which the user should know about. """
@@ -521,7 +531,7 @@ class CompareResultsAnalysis(BaseAnalysis):
 			('fid_b', 'integer', column_gen(5)),
 		]
 		if filter_mode == 'id':
-			columns.append(('match_id', 'string', (None if v is None else str(v) for v in column_gen(6))))
+			columns.append(('match_id', 'string', (FormatIdValue(v) for v in column_gen(6))))
 		tableId = self._model.createTable(
 			OutputName('Object comparison', props),
 			self._model.coordinateReferenceSystem(table1),
