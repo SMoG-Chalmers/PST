@@ -289,6 +289,42 @@ class QGISModel(object):
 			else:
 				yield (QgsGeometry(g), feature[value_index], id_value)
 
+	def expressionValues(self, table_name, expression_text, rowids):
+		""" Evaluates a QGIS expression for each row in rowids (in order). Yields None for NULL results. """
+		layer = self._layerFromName(table_name)
+		expression = QgsExpression(expression_text)
+		if expression.hasParserError():
+			parser_error = " ".join(expression.parserErrorString().split()) or "syntax error"
+			raise Exception("Invalid expression '%s': %s" % (expression_text, parser_error))
+		# QGIS evaluates unknown fields to NULL without an error, so check them explicitly
+		field_names = set(layer.fields().names())
+		unknown_fields = sorted(name for name in expression.referencedColumns() if name != QgsFeatureRequest.ALL_ATTRIBUTES and name not in field_names)
+		if unknown_fields:
+			raise Exception("Expression '%s' refers to unknown field(s) in '%s': %s" % (expression_text, table_name, ", ".join(unknown_fields)))
+		context = QgsExpressionContext(QgsExpressionContextUtils.globalProjectLayerScopes(layer))
+		expression.prepare(context)
+		request = QgsFeatureRequest()
+		if not expression.needsGeometry():
+			request.setFlags(QgsFeatureRequest.NoGeometry)
+		request.setSubsetOfAttributes(expression.referencedColumns(), layer.fields())
+		row_idx = 0
+		for feature in layer.getFeatures(request):
+			if row_idx >= rowids.size():
+				break
+			if feature.id() != rowids.at(row_idx):
+				continue
+			row_idx += 1
+			context.setFeature(feature)
+			value = expression.evaluate(context)
+			if expression.hasEvalError():
+				raise Exception("Expression '%s' failed for feature %d: %s" % (expression_text, feature.id(), expression.evalErrorString()))
+			if value is None or (isinstance(value, QVariant) and value.isNull()):
+				yield None
+			else:
+				yield value
+		if row_idx != rowids.size():
+			raise Exception("QGISModel.expressionValues: Only %d of %d values could be evaluated!" % (row_idx, rowids.size()))
+
 	def readValues(self, table_name, column_name, rowids, out_values, progress=None):
 		num_rows = rowids.size()
 		for i,v in enumerate(self.values(table_name, column_name, rowids)):

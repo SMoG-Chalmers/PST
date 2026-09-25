@@ -76,15 +76,17 @@ namespace psta
 			case EPSTADistanceType_Angular:
 				break;
 			case EPSTADistanceType_Weights:
-				if (!desc.m_LineCostFactors)
-					throw std::runtime_error("SPSTAODBetweenness::m_LineCostFactors is required for weights distance type");
-				if (desc.m_LineCostFactorCount != Graph().getLineCount())
-					throw std::runtime_error("SPSTAODBetweenness::m_LineCostFactorCount does not match graph line count");
-				for (unsigned int i = 0; i < desc.m_LineCostFactorCount; ++i)
+				if (!desc.m_LineCosts)
+					throw std::runtime_error("SPSTAODBetweenness::m_LineCosts is required for weights distance type");
+				if (desc.m_LineCostCount != Graph().getLineCount())
+					throw std::runtime_error("SPSTAODBetweenness::m_LineCostCount does not match graph line count");
+				if (desc.m_LineCostMode != SPSTAODBetweenness::ELineCostMode_PerMeter && desc.m_LineCostMode != SPSTAODBetweenness::ELineCostMode_PerLine)
+					throw std::runtime_error("SPSTAODBetweenness::m_LineCostMode is invalid");
+				for (unsigned int i = 0; i < desc.m_LineCostCount; ++i)
 				{
 					// Negative costs would break the shortest path search
-					if (!std::isfinite(desc.m_LineCostFactors[i]) || desc.m_LineCostFactors[i] < 0.f)
-						throw std::runtime_error("SPSTAODBetweenness::m_LineCostFactors must be finite and non-negative");
+					if (!std::isfinite(desc.m_LineCosts[i]) || desc.m_LineCosts[i] < 0.f)
+						throw std::runtime_error("SPSTAODBetweenness::m_LineCosts must be finite and non-negative");
 				}
 				break;
 			default:
@@ -108,10 +110,21 @@ namespace psta
 		
 		const SPSTARadii& Radius() const { return m_Desc.m_Radius; }
 
-		float GetLineCostFactor(int line_index) const
+		// Cost of moving the given distance along a line
+		float GetLineCost(int line_index, float distance_along_line) const
 		{
-			ASSERT(m_Desc.m_LineCostFactors && (unsigned int)line_index < m_Desc.m_LineCostFactorCount);
-			return m_Desc.m_LineCostFactors[line_index];
+			ASSERT(m_Desc.m_LineCosts && (unsigned int)line_index < m_Desc.m_LineCostCount);
+			const float cost = m_Desc.m_LineCosts[line_index];
+			if (SPSTAODBetweenness::ELineCostMode_PerMeter == m_Desc.m_LineCostMode)
+				return cost * distance_along_line;
+			const float line_length = Graph().getLine(line_index).length;
+			return (line_length > 0.f) ? cost * (distance_along_line / line_length) : 0.f;
+		}
+
+		// Cost of the connection between an origin or destination point and its closest line
+		float GetPointConnectionCost(float distance_from_line) const
+		{
+			return (SPSTAODBetweenness::ELineCostMode_PerMeter == m_Desc.m_LineCostMode) ? distance_from_line : 0.f;
 		}
 
 		bool FetchNextOrigin(COORDS& coords, float& weight, int& category)
@@ -283,7 +296,8 @@ namespace psta
 		step.m_PrevTrace = -1;
 		step.m_AccDist.SetZero();
 		step.m_AccDist.m_Walking = dist_from_line;
-		step.m_AccDist.m_Weight = dist_from_line;
+		if (use_weights)
+			step.m_AccDist.m_Weight = m_Ctx.GetPointConnectionCost(dist_from_line);
 		if (dist_from_line*dist_from_line <= m_Ctx.Radius().StraightSqr())
 		{
 			if (we_care_about_angles)
@@ -372,7 +386,7 @@ namespace psta
 				const float walked_along_line = fabsf(from_line_pos - linecrossing.linePos);
 				next_step.m_AccDist.m_Walking += walked_along_line;
 				if (use_weights)
-					next_step.m_AccDist.m_Weight += m_Ctx.GetLineCostFactor(step.m_Line) * walked_along_line;
+					next_step.m_AccDist.m_Weight += m_Ctx.GetLineCost(step.m_Line, walked_along_line);
 
 				if (!IsWithinRadius(next_step.m_AccDist))
 					continue;
@@ -429,7 +443,7 @@ namespace psta
 					const float walked_along_line = fabsf(point.linePos - from_line_pos);
 					next_step.m_AccDist.m_Walking += walked_along_line + point.distFromLine;
 					if (use_weights)
-						next_step.m_AccDist.m_Weight += m_Ctx.GetLineCostFactor(step.m_Line) * walked_along_line + point.distFromLine;
+						next_step.m_AccDist.m_Weight += m_Ctx.GetLineCost(step.m_Line, walked_along_line) + m_Ctx.GetPointConnectionCost(point.distFromLine);
 				}
 				if (!IsWithinRadius(next_step.m_AccDist))
 					continue;

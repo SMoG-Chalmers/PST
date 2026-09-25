@@ -53,13 +53,22 @@ struct SPSTAODBetweenness
 	// Distance measurement
 	unsigned char m_DistanceType = EPSTADistanceType_Walking;  // enum EPSTADistanceType
 
-	// Line cost factors, required when m_DistanceType is EPSTADistanceType_Weights.
-	// One non-negative factor per line in m_Graph. The cost of moving along a line
-	// is factor * distance along the line, i.e. the factor is cost per meter.
-	// Distances from origins and destinations to their closest line cost 1 per meter.
-	// Radii are still measured in their own units (walking radius in meters etc).
-	const float* m_LineCostFactors = nullptr;
-	unsigned int m_LineCostFactorCount = 0;
+	// Line costs, required when m_DistanceType is EPSTADistanceType_Weights.
+	// One finite, non-negative cost per line in m_Graph. Radii are still measured
+	// in their own units (walking radius in meters etc).
+	enum ELineCostMode
+	{
+		// Cost of moving along a line is cost * distance along the line.
+		// Distances from origins and destinations to their closest line cost 1 per meter.
+		ELineCostMode_PerMeter = 0,
+		// Cost of traversing a whole line is cost, regardless of its length.
+		// Partially traversed lines cost their traversed share. Distances from
+		// origins and destinations to their closest line are free.
+		ELineCostMode_PerLine = 1,
+	};
+	const float*  m_LineCosts = nullptr;
+	unsigned int  m_LineCostCount = 0;
+	unsigned char m_LineCostMode = ELineCostMode_PerMeter;
 
 	// Radius
 	SPSTARadii m_Radius;

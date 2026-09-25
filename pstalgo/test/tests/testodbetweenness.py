@@ -22,7 +22,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 import array, math, unittest
 import pstalgo
 from pstalgo import DistanceType, Radii
-from pstalgo import ODBetweenness, ODBDestinationMode, LineCostFactorsFromValues
+from pstalgo import ODBetweenness, ODBDestinationMode, LineCostMode
 from .common import *
 from .graphs import *
 
@@ -103,7 +103,7 @@ class TestODBetweenness(unittest.TestCase):
 		pstalgo.FreeGraph(g)
 
 	def test_odb_weights_neutral_matches_walking(self):
-		# With every factor at 1 the weighted route must be the walking route
+		# With every line cost at 1 per meter the weighted route must be the walking route
 		g = CreateTwoRouteTestGraph()
 		self.doTwoRouteTest(g, DistanceType.WALKING, None, Radii(), TWO_ROUTE_SCORES_TOP)
 		self.doTwoRouteTest(g, DistanceType.WEIGHTS, array.array('f', [1]*6), Radii(), TWO_ROUTE_SCORES_TOP)
@@ -121,36 +121,30 @@ class TestODBetweenness(unittest.TestCase):
 		# Walking radius is still measured in meters: the cheaper bottom route is
 		# 4.92 m long and falls outside a 4.8 m radius, the top route (4.63 m) does not
 		g = CreateTwoRouteTestGraph()
-		factors = array.array('f', [1, 2, 2, 1, 1, 1])
-		self.doTwoRouteTest(g, DistanceType.WEIGHTS, factors, Radii(walking=4.8), TWO_ROUTE_SCORES_TOP)
-		self.doTwoRouteTest(g, DistanceType.WEIGHTS, factors, Radii(walking=4.5), [0]*6)
+		costs = array.array('f', [1, 2, 2, 1, 1, 1])
+		self.doTwoRouteTest(g, DistanceType.WEIGHTS, costs, Radii(walking=4.8), TWO_ROUTE_SCORES_TOP)
+		self.doTwoRouteTest(g, DistanceType.WEIGHTS, costs, Radii(walking=4.5), [0]*6)
 		pstalgo.FreeGraph(g)
 
-	def test_odb_weights_invalid_factors(self):
+	def test_odb_weights_invalid_costs(self):
 		g = CreateTwoRouteTestGraph()
-		for factors in [None, array.array('f', [1]*5), array.array('f', [1, 1, -1, 1, 1, 1])]:
+		for costs in [None, array.array('f', [1]*5), array.array('f', [1, 1, -1, 1, 1, 1]), array.array('f', [1, 1, float('nan'), 1, 1, 1])]:
 			with self.assertRaises(Exception):
-				self.doTwoRouteTest(g, DistanceType.WEIGHTS, factors, Radii(), [0]*6)
+				self.doTwoRouteTest(g, DistanceType.WEIGHTS, costs, Radii(), [0]*6)
+		with self.assertRaises(Exception):
+			self.doTwoRouteTest(g, DistanceType.WEIGHTS, array.array('f', [1]*6), Radii(), [0]*6, line_cost_mode=7)
 		pstalgo.FreeGraph(g)
 
-	def test_line_cost_factors_from_values(self):
-		(f, missing) = LineCostFactorsFromValues([30, 50, 70], increases_cost=True, max_factor=3)
-		self.assertTrue(IsArrayRoughlyEqual(f, [1, 2, 3]))
-		self.assertEqual(missing, 0)
-		(f, missing) = LineCostFactorsFromValues([30, 50, 70], increases_cost=False, max_factor=3)
-		self.assertTrue(IsArrayRoughlyEqual(f, [3, 2, 1]))
-		(f, missing) = LineCostFactorsFromValues([0, None, 1], increases_cost=False, max_factor=2)
-		self.assertTrue(IsArrayRoughlyEqual(f, [2, 1, 1]))
-		self.assertEqual(missing, 1)
-		(f, missing) = LineCostFactorsFromValues([5, 5, 5], max_factor=2)
-		self.assertTrue(IsArrayRoughlyEqual(f, [1, 1, 1]))
-		(f, missing) = LineCostFactorsFromValues([None, None], max_factor=2)
-		self.assertTrue(IsArrayRoughlyEqual(f, [1, 1]))
-		self.assertEqual(missing, 2)
-		with self.assertRaises(ValueError):
-			LineCostFactorsFromValues([1, 2], max_factor=0.5)
+	def test_odb_weights_per_line(self):
+		# Slightly cheaper bottom lines: per meter the extra length of the bottom
+		# route still makes it more expensive, per line the bottom route is cheaper
+		g = CreateTwoRouteTestGraph()
+		costs = array.array('f', [1, 1, 1, 0.95, 0.95, 1])
+		self.doTwoRouteTest(g, DistanceType.WEIGHTS, costs, Radii(), TWO_ROUTE_SCORES_TOP, line_cost_mode=LineCostMode.PER_METER)
+		self.doTwoRouteTest(g, DistanceType.WEIGHTS, costs, Radii(), TWO_ROUTE_SCORES_BOTTOM, line_cost_mode=LineCostMode.PER_LINE)
+		pstalgo.FreeGraph(g)
 
-	def doTwoRouteTest(self, graph_handle, distance_type, line_cost_factors, radius, scores_check):
+	def doTwoRouteTest(self, graph_handle, distance_type, line_costs, radius, scores_check, line_cost_mode=LineCostMode.PER_METER):
 		self.doTest(
 			graph_handle = graph_handle,
 			origin_points = array.array('d', [0.1, 0]),
@@ -160,21 +154,23 @@ class TestODBetweenness(unittest.TestCase):
 			distance_type = distance_type,
 			radius = radius,
 			scores_check = scores_check,
-			line_cost_factors = line_cost_factors)
+			line_costs = line_costs,
+			line_cost_mode = line_cost_mode)
 
-	def doTest(self, graph_handle, origin_points, origin_weights, destination_weights, destination_mode, distance_type, radius, scores_check, line_cost_factors=None):
+	def doTest(self, graph_handle, origin_points, origin_weights, destination_weights, destination_mode, distance_type, radius, scores_check, line_costs=None, line_cost_mode=LineCostMode.PER_METER):
 		scores = array.array('f', [0])*len(scores_check)
 		ODBetweenness(
-			graph_handle = graph_handle,
-			origin_points = origin_points,
+			graph_handle = graph_handle, 
+			origin_points = origin_points, 
 			origin_weights = origin_weights,
 			destination_weights = destination_weights,
-			destination_mode = destination_mode,
-			distance_type = distance_type,
-			radius = radius,
-			progress_callback = None,
+			destination_mode = destination_mode, 
+			distance_type = distance_type, 
+			radius = radius, 
+			progress_callback = None, 
 			out_scores = scores,
-			line_cost_factors = line_cost_factors)
+			line_costs = line_costs,
+			line_cost_mode = line_cost_mode)
 		self.assertTrue(IsArrayRoughlyEqual(scores, scores_check), str(scores) + " != " + str(scores_check))
 
 # Line order in CreateTwoRouteTestGraph: start, top-left, top-right, bottom-left, bottom-right, end

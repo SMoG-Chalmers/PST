@@ -19,7 +19,9 @@ You should have received a copy of the GNU Lesser General Public License
 along with PST. If not, see <http://www.gnu.org/licenses/>.
 """
 
-from qgis.PyQt.QtWidgets import QLabel, QComboBox, QDoubleSpinBox, QLineEdit, QMessageBox, QVBoxLayout
+from qgis.PyQt.QtWidgets import QLabel, QCheckBox, QComboBox, QLineEdit, QMessageBox, QVBoxLayout
+from qgis.core import QgsProject
+from qgis.gui import QgsFieldExpressionWidget
 from ..wizard import BaseWiz, BasePage, WizProp, WizPropCombo
 from ..pages import FinishPage, ProgressPage, ReadyPage, AddRadiusProperties, RadiusType
 from ..widgets import PropertySheetWidget, WidgetEnableCheckBox
@@ -131,15 +133,26 @@ DESTINATION_MODE_ITEMS = [
 ROUTE_CHOICE_ITEMS = [
 	("Minimum walking distance", "walking"),
 	("Least angular",            "angular"),
-	("Minimum weighted distance (line attribute)", "weights"),
+	("Minimum weighted distance (expression)", "weights"),
 ]
 
-WEIGHT_DIRECTION_ITEMS = [
-	("Higher value increases cost", "increase"),
-	("Higher value decreases cost", "decrease"),
-]
+class WizPropExpression(object):
+	""" Wizard property for a QgsFieldExpressionWidget """
+	def __init__(self, widget, default):
+		self._widget = widget
+		self._default = default
 
-DEFAULT_WEIGHT_MAX_FACTOR = 2.0
+	def value(self):
+		return self._widget.expression()
+
+	def default(self):
+		return self._default
+
+	def setValue(self, value):
+		self._widget.setExpression(value or "")
+
+	def toString(self, value):
+		return str(value)
 
 RADIUS_TYPES = [RadiusType.STRAIGHT, RadiusType.WALKING, RadiusType.ANGULAR]
 
@@ -167,24 +180,17 @@ class DistanceSettingsPage(BasePage):
 		self.regProp("route_choice", WizPropCombo(self._routeChoiceCombo, ROUTE_CHOICE_ITEMS[0][1]))
 		self._routeChoiceCombo.currentIndexChanged.connect(self.updateWeightWidgets)
 
-		# Line attribute weighting (only used with weighted route choice)
-		prop_sheet.newSection("Line attribute weighting")
-		self._weightAttributeCombo = QComboBox()
-		prop_sheet.add(QLabel("Line attribute"), self._weightAttributeCombo)
-		self.regProp("dw_attribute", WizProp(self._weightAttributeCombo, ""))
-		self._weightDirectionCombo = QComboBox()
-		for item in WEIGHT_DIRECTION_ITEMS:
-			self._weightDirectionCombo.addItem(item[0], item[1])
-		prop_sheet.add(QLabel("Effect"), self._weightDirectionCombo)
-		self.regProp("dw_direction", WizPropCombo(self._weightDirectionCombo, WEIGHT_DIRECTION_ITEMS[0][1]))
-		self._weightMaxFactorSpin = QDoubleSpinBox()
-		self._weightMaxFactorSpin.setRange(1, 1000)
-		self._weightMaxFactorSpin.setDecimals(2)
-		self._weightMaxFactorSpin.setSingleStep(0.1)
-		self._weightMaxFactorSpin.setValue(DEFAULT_WEIGHT_MAX_FACTOR)
-		prop_sheet.add(QLabel("Highest cost factor"), self._weightMaxFactorSpin, QLabel("x distance"))
-		self.regProp("dw_max_factor", WizProp(self._weightMaxFactorSpin, DEFAULT_WEIGHT_MAX_FACTOR))
-		self._weightWidgets = [self._weightAttributeCombo, self._weightDirectionCombo, self._weightMaxFactorSpin]
+		# Line cost (only used with weighted route choice)
+		prop_sheet.newSection("Line cost")
+		self._costExpressionWidget = QgsFieldExpressionWidget()
+		prop_sheet.add(QLabel("Cost expression"), self._costExpressionWidget)
+		self.regProp("dw_expression", WizPropExpression(self._costExpressionWidget, ""))
+		self._costPerMeterCheck = QCheckBox("Multiply cost by segment length")
+		self._costPerMeterCheck.setChecked(True)
+		self._costPerMeterCheck.setToolTip("Checked: the cost is per meter. Unchecked: the cost applies to the whole segment regardless of its length.")
+		prop_sheet.add(self._costPerMeterCheck)
+		self.regProp("dw_per_meter", WizProp(self._costPerMeterCheck, True))
+		self._weightWidgets = [self._costExpressionWidget, self._costPerMeterCheck]
 
 		# Radius
 		prop_sheet.newSection("Radius")
@@ -204,20 +210,9 @@ class DistanceSettingsPage(BasePage):
 		self.setLayout(vlayout)
 
 	def initializePage(self):
-		network_table = self.wizard().prop("in_network")
-		selected = self._weightAttributeCombo.currentText()
-		self._weightAttributeCombo.clear()
-		if network_table:
-			for column_name in self.model().columnNames(network_table):
-				try:
-					column_type = self.model().columnType(network_table, column_name)
-				except Exception:
-					continue  # Unsupported column types (dates etc) can't be weights
-				if column_type in ["integer", "double"]:
-					self._weightAttributeCombo.addItem(column_name)
-		index = self._weightAttributeCombo.findText(selected)
-		if index >= 0:
-			self._weightAttributeCombo.setCurrentIndex(index)
+		# Let the expression builder show the fields of the network layer
+		layers = QgsProject.instance().mapLayersByName(self.wizard().prop("in_network") or "")
+		self._costExpressionWidget.setLayer(layers[0] if layers else None)
 		self.updateWeightWidgets()
 
 	def updateWeightWidgets(self, *args):
@@ -227,9 +222,13 @@ class DistanceSettingsPage(BasePage):
 
 	def validatePage(self):
 		p = self.wizard().prop
-		if p("route_choice") == "weights" and not p("dw_attribute"):
-			QMessageBox.information(self, "Missing line attribute", "Please select a numeric line attribute for weighted route choice.")
-			return False
+		if p("route_choice") == "weights":
+			if not p("dw_expression"):
+				QMessageBox.information(self, "Missing cost expression", "Please enter a line cost expression for weighted route choice.")
+				return False
+			if not self._costExpressionWidget.isValidExpression():
+				QMessageBox.information(self, "Invalid cost expression", "The line cost expression is not valid.")
+				return False
 		if p("column_suffix_enabled"):
 			column_suffix = p("column_suffix")
 			if not column_suffix:

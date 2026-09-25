@@ -28,6 +28,11 @@ class ODBDestinationMode:
 	ALL_REACHABLE_DESTINATIONS = 0
 	CLOSEST_DESTINATION_ONLY = 1
 
+class LineCostMode:
+	""" How line costs are applied with DistanceType.WEIGHTS """
+	PER_METER = 0  # Cost of a line is cost * length
+	PER_LINE = 1   # Cost of a line is cost, regardless of length
+
 class SPSTAODBetweenness(Structure) :
 	_fields_ = [
 		# Version
@@ -51,9 +56,10 @@ class SPSTAODBetweenness(Structure) :
 		# Distance Type (DistanceType enum in common.py)
 		("m_DistanceType", ctypes.c_ubyte),
 
-		# Line cost factors (cost per meter, one per line), required for DistanceType.WEIGHTS
-		("m_LineCostFactors",     POINTER(c_float)),
-		("m_LineCostFactorCount", c_uint),
+		# Line costs (one per line), required for DistanceType.WEIGHTS
+		("m_LineCosts",     POINTER(c_float)),
+		("m_LineCostCount", c_uint),
+		("m_LineCostMode",  ctypes.c_ubyte),  # LineCostMode enum
 
 		# Radius
 		("m_Radius", Radii),
@@ -71,54 +77,18 @@ class SPSTAODBetweenness(Structure) :
 		self.m_Version = 2
 
 
-def LineCostFactorsFromValues(values, increases_cost=True, max_factor=2.0):
-	"""
-	Maps one attribute value per line to a cost factor (cost per meter) in the
-	range [1, max_factor], for use with DistanceType.WEIGHTS.
-
-	The mapping is linear between the smallest and largest value. With
-	increases_cost=True the largest value gets max_factor and the smallest gets 1,
-	with increases_cost=False it is the other way around. Missing values (None)
-	get factor 1. If all values are equal, every line gets factor 1.
-
-	Returns (factors, missing_count), where factors is an array.array('f').
-	"""
-	import array
-	if max_factor < 1:
-		raise ValueError("max_factor must be at least 1")
-	values = list(values)
-	present = [v for v in values if v is not None]
-	missing_count = len(values) - len(present)
-	factors = array.array('f', [1.0]) * len(values)
-	if not present:
-		return (factors, missing_count)
-	v_min = min(present)
-	v_max = max(present)
-	if v_max == v_min:
-		return (factors, missing_count)
-	span = float(v_max - v_min)
-	scale = max_factor - 1.0
-	for i, v in enumerate(values):
-		if v is None:
-			continue
-		t = (v - v_min) / span
-		if not increases_cost:
-			t = 1.0 - t
-		factors[i] = 1.0 + scale * t
-	return (factors, missing_count)
-
-
 def ODBetweenness(
-		graph_handle,
+		graph_handle, 
 		origin_points,
 		origin_weights,
 		destination_weights = None,
-		destination_mode = ODBDestinationMode.ALL_REACHABLE_DESTINATIONS,
-		distance_type = DistanceType.WALKING,
-		radius=Radii(),
-		progress_callback = None,
+		destination_mode = ODBDestinationMode.ALL_REACHABLE_DESTINATIONS, 
+		distance_type = DistanceType.WALKING, 
+		radius=Radii(), 
+		progress_callback = None, 
 		out_scores=None,
-		line_cost_factors=None):
+		line_costs=None,
+		line_cost_mode=LineCostMode.PER_METER):
 
 	desc = SPSTAODBetweenness()
 	desc.m_Graph = graph_handle
@@ -129,7 +99,8 @@ def ODBetweenness(
 	(desc.m_DestinationWeights, desc.m_DestinationCount) = UnpackArray(destination_weights, 'f')
 	desc.m_DestinationMode = destination_mode
 	desc.m_DistanceType = distance_type
-	(desc.m_LineCostFactors, desc.m_LineCostFactorCount) = UnpackArray(line_cost_factors, 'f')
+	(desc.m_LineCosts, desc.m_LineCostCount) = UnpackArray(line_costs, 'f')
+	desc.m_LineCostMode = line_cost_mode
 	desc.m_Radius = radius
 	desc.m_ProgressCallback = CreateCallbackWrapper(progress_callback)
 	desc.m_ProgressCallbackUser = c_void_p() 

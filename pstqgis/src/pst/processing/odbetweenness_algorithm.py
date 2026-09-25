@@ -31,6 +31,8 @@ from qgis.core import (QgsProcessing,
 					   QgsProcessingParameterEnum,
 					   QgsProcessingParameterString,
 					   QgsProcessingParameterNumber,
+					   QgsProcessingParameterExpression,
+					   QgsProcessingParameterBoolean,
 					   QgsProcessingOutputString,
 					   QgsField)
 
@@ -89,9 +91,8 @@ class ODBetweennessAlgorithm(QgsProcessingAlgorithm):
 	DESTINATION_FIELD = 'DESTINATION_FIELD'
 	DESTINATION_MODE = 'DESTINATION_MODE'
 	ROUTE_CHOICE = 'ROUTE_CHOICE'
-	WEIGHT_FIELD = 'WEIGHT_FIELD'
-	WEIGHT_DIRECTION = 'WEIGHT_DIRECTION'
-	WEIGHT_MAX_FACTOR = 'WEIGHT_MAX_FACTOR'
+	COST_EXPRESSION = 'COST_EXPRESSION'
+	COST_PER_METER = 'COST_PER_METER'
 	STRAIGHT_LINE_RADIUS = 'STRAIGHT_LINE_RADIUS'
 	WALKING_RADIUS = 'WALKING_RADIUS'
 	ANGULAR_RADIUS = 'ANGULAR_RADIUS'
@@ -105,15 +106,8 @@ class ODBetweennessAlgorithm(QgsProcessingAlgorithm):
 	_ROUTE_CHOICE_MODES = [
 		('Minimum walking distance', 'walking'),
 		('Least angular',            'angular'),
-		('Minimum weighted distance (line attribute)', 'weights'),
+		('Minimum weighted distance (expression)', 'weights'),
 	]
-
-	_WEIGHT_DIRECTIONS = [
-		('Higher value increases cost', 'increase'),
-		('Higher value decreases cost', 'decrease'),
-	]
-
-	_DEFAULT_WEIGHT_MAX_FACTOR = 2.0
 
 	def initAlgorithm(self, config):
 		self.addParameter(
@@ -184,31 +178,19 @@ class ODBetweennessAlgorithm(QgsProcessingAlgorithm):
 		)
 
 		self.addParameter(
-			QgsProcessingParameterField(
-				self.WEIGHT_FIELD,
-				self.tr('Line weight attribute (weighted route choice)'),
+			QgsProcessingParameterExpression(
+				self.COST_EXPRESSION,
+				self.tr('Line cost expression (weighted route choice)'),
 				optional = True,
-				type = QgsProcessingParameterField.Numeric,
 				parentLayerParameterName = self.NETWORK
 			)
 		)
 
 		self.addParameter(
-			QgsProcessingParameterEnum(
-				self.WEIGHT_DIRECTION,
-				self.tr('Line weight effect'),
-				options = [entry[0] for entry in self._WEIGHT_DIRECTIONS],
-				defaultValue = 0
-			)
-		)
-
-		self.addParameter(
-			QgsProcessingParameterNumber(
-				self.WEIGHT_MAX_FACTOR,
-				self.tr('Highest line cost factor'),
-				type = QgsProcessingParameterNumber.Double,
-				defaultValue = self._DEFAULT_WEIGHT_MAX_FACTOR,
-				minValue = 1.0
+			QgsProcessingParameterBoolean(
+				self.COST_PER_METER,
+				self.tr('Multiply line cost by segment length'),
+				defaultValue = True
 			)
 		)
 
@@ -250,8 +232,8 @@ class ODBetweennessAlgorithm(QgsProcessingAlgorithm):
 		if not props["rad_angular_enabled"] and not props["rad_straight_enabled"] and not props["rad_walking_enabled"]:
 			return (False, "No radius specified")
 
-		if props["route_choice"] == "weights" and not props["dw_attribute"]:
-			return (False, "Weighted route choice requires a line weight attribute")
+		if props["route_choice"] == "weights" and not props["dw_expression"]:
+			return (False, "Weighted route choice requires a line cost expression")
 
 		return (True, None)
 
@@ -298,9 +280,8 @@ class ODBetweennessAlgorithm(QgsProcessingAlgorithm):
 
 		props["route_choice"] = self._ROUTE_CHOICE_MODES[self.parameterAsEnum(parameters, self.ROUTE_CHOICE, context)][1]
 
-		props["dw_attribute"] = self.parameterAsString(parameters, self.WEIGHT_FIELD, context)
-		props["dw_direction"] = self._WEIGHT_DIRECTIONS[self.parameterAsEnum(parameters, self.WEIGHT_DIRECTION, context)][1]
-		props["dw_max_factor"] = self.parameterAsDouble(parameters, self.WEIGHT_MAX_FACTOR, context)
+		props["dw_expression"] = self.parameterAsExpression(parameters, self.COST_EXPRESSION, context)
+		props["dw_per_meter"] = self.parameterAsBool(parameters, self.COST_PER_METER, context)
 
 		return props
 
