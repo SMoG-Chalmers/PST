@@ -165,33 +165,44 @@ def WarnIfDuplicateIds(table, id_column, duplicate_count):
 			'PST', Qgis.Warning)
 
 def SetGradientRasterShader(layer, valueRange, log_scale=False):
-	""" Colours the gradient raster with the same discrete classes as the range
-	    polygons, so the two outputs of an area comparison look alike. 'log_scale'
-	    switches the class boundaries from linearly to logarithmically spaced fractions
-	    of the value range, which keeps ordinary changes visible when a few extreme
-	    objects dominate the range.
+	""" Colours the gradient raster with the same classes as the range polygons, so the
+	    two outputs of an area comparison look alike. 'log_scale' switches the class
+	    boundaries from linearly to logarithmically spaced fractions of the value range,
+	    which keeps ordinary changes visible when a few extreme objects dominate the range.
 
-	    A discrete ramp gives each cell the colour of the class its value falls in; an
-	    interpolated ramp would instead fade the weakest class from transparent to its
-	    colour and make it nearly invisible while the polygons draw it solid. """
+	    Every class is bounded by two ramp items of the same colour, so the colour only
+	    changes at the class boundaries, exactly as in the polygons. The ramp is still of
+	    the interpolated type because that gives the continuous legend bar with the
+	    largest increase at the top; a discrete ramp classifies the same way but lists
+	    its classes in ascending order, putting the largest decrease at the top. """
 	fractions = RangeFractions(log_scale)
-	labels = RangeLabels(fractions)
 	n = len(fractions) - 1
 	posRange = max(0, valueRange[1])
 	negRange = min(0, valueRange[0])
-	shader = QgsRasterShader()
-	fnc = QgsColorRampShader()
-	fnc.setColorRampType(QgsColorRampShader.Discrete)
-	# Discrete: an item colours every value up to its own value (and above the previous
-	# item's), so items carry the UPPER boundary of their class.
-	ramp_items = []
+
+	# (lower, upper, colour) in ascending order; None is the transparent 'no change' class
+	classes = []
 	if negRange < 0:
 		for i in range(n):
-			ramp_items.append(QgsColorRampShader.ColorRampItem(fractions[n-1-i] * negRange, QColor(*tupleFromHtmlColor(COLORS[i])), labels[i]))
-	ramp_items.append(QgsColorRampShader.ColorRampItem(fractions[0] * posRange if posRange > 0 else 0, QColor(255, 255, 255, 0), ""))
+			classes.append((fractions[n-i] * negRange, fractions[n-1-i] * negRange, COLORS[i]))
+	classes.append((fractions[0] * negRange, fractions[0] * posRange, None))
 	if posRange > 0:
 		for i in range(n):
-			ramp_items.append(QgsColorRampShader.ColorRampItem(fractions[i+1] * posRange, QColor(*tupleFromHtmlColor(COLORS[i + n])), labels[i + n]))
+			classes.append((fractions[i] * posRange, fractions[i+1] * posRange, COLORS[i + n]))
+
+	# A value on a boundary belongs to the class below it. The next class starts a step
+	# above the boundary that is relative to it, so it stays negligible even for the
+	# smallest logarithmic fractions.
+	ramp_items = []
+	for k, (lower, upper, colour) in enumerate(classes):
+		c = QColor(255, 255, 255, 0) if colour is None else QColor(*tupleFromHtmlColor(colour))
+		start = lower if k == 0 else lower + max(abs(lower) * 1e-9, 1e-15)
+		ramp_items.append(QgsColorRampShader.ColorRampItem(start, c))
+		ramp_items.append(QgsColorRampShader.ColorRampItem(upper, c))
+
+	shader = QgsRasterShader()
+	fnc = QgsColorRampShader()
+	fnc.setColorRampType(QgsColorRampShader.Interpolated)
 	fnc.setColorRampItemList(ramp_items)
 	shader.setRasterShaderFunction(fnc)
 	renderer = QgsSingleBandPseudoColorRenderer(layer.dataProvider(), 1, shader)
