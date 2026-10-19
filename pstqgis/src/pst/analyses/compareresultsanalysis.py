@@ -30,7 +30,7 @@ from .utils import MultiTaskProgressDelegate, CreateRasterFromPstaHandle
 from ..utils import tupleFromHtmlColor
 from ..model import GeometryType
 
-COLORS = ['#5149f6cc', '#69b7f7cc', '#d0f1e2cc', '#f8feeacc', '#f9f8d6cc', '#f2e262cc', '#f1b152cc', '#e04d4dcc']
+COLORS = ['#5149f6cc', '#69b7f7cc', '#d0f1e2cc', '#e6f2c6cc', '#f9f8d6cc', '#f2e262cc', '#f1b152cc', '#e04d4dcc']
 RANGES = [0.01, 0.10, 0.25, 0.5, 1.0]
 RANGE_TEXTS = ["%.2f - %.2f (-)" % (RANGES[-i-2], RANGES[-i-1]) for i in range(len(RANGES) - 1)]
 RANGE_TEXTS += ["%.2f - %.2f (+)" % (RANGES[i], RANGES[i+1]) for i in range(len(RANGES) - 1)]
@@ -41,6 +41,17 @@ RANGE_TEXTS += ["%.2f - %.2f (+)" % (RANGES[i], RANGES[i+1]) for i in range(len(
 LOG_RANGES = [0.0001, 0.001, 0.01, 0.1, 1.0]
 LOG_RANGE_TEXTS = ["%.4f - %.4f (-)" % (LOG_RANGES[-i-2], LOG_RANGES[-i-1]) for i in range(len(LOG_RANGES) - 1)]
 LOG_RANGE_TEXTS += ["%.4f - %.4f (+)" % (LOG_RANGES[i], LOG_RANGES[i+1]) for i in range(len(LOG_RANGES) - 1)]
+
+# Drawing order of the object comparison classes, as rendering pass per COLORS index
+# (a higher pass is drawn on top). With 'All objects' a changed object appears both in
+# its old and its new version, often on top of each other, so the order decides which
+# colour shows. From the top: red, orange, yellow, cyan, light blue, dark blue, then
+# the two palest classes at the bottom.
+OBJECT_DRAW_ORDER = [2, 3, 4, 0, 1, 5, 6, 7]
+
+# Tolerance used when the user asks for 0: the coordinates must be identical, up to the
+# millimetre rounding already applied when shared nodes are registered.
+EXACT_TOLERANCE_M = 0.001
 
 # Log-spaced fractions for the raster's optional logarithmic colour scale. The raster
 # needs a wider span than the object output: blurring spreads each object's value over
@@ -164,46 +175,70 @@ def WarnIfDuplicateIds(table, id_column, duplicate_count):
 			"only the first object per ID value is matched." % (duplicate_count, table, id_column),
 			'PST', Qgis.Warning)
 
-def SetGradientRasterShader(layer, valueRange, log_scale=False):
-	""" Colours the gradient raster with the same classes as the range polygons, so the
-	    two outputs of an area comparison look alike. 'log_scale' switches the class
-	    boundaries from linearly to logarithmically spaced fractions of the value range,
-	    which keeps ordinary changes visible when a few extreme objects dominate the range.
+def IsEmptyId(value):
+	""" True for an ID value that cannot identify an object: NULL or blank text. Such
+	    objects are never matched, since they would otherwise all share one ID. """
+	if value is None or (hasattr(value, 'isNull') and value.isNull()):
+		return True
+	return isinstance(value, str) and value.strip() == ''
 
-	    Every class is bounded by two ramp items of the same colour, so the colour only
-	    changes at the class boundaries, exactly as in the polygons. The ramp is still of
-	    the interpolated type because that gives the continuous legend bar with the
-	    largest increase at the top; a discrete ramp classifies the same way but lists
-	    its classes in ascending order, putting the largest decrease at the top. """
+def WarnIfEmptyIds(table, id_column, empty_count):
+	if empty_count > 0:
+		QgsMessageLog.logMessage(
+			"Compare Results: %d objects in '%s' have no value in ID column '%s'; "
+			"they are not matched and are left out." % (empty_count, table, id_column),
+			'PST', Qgis.Warning)
+
+def SetGradientRasterShader(layer, valueRange, log_scale=False):
+	""" Colours the gradient raster with the same eight classes as the range polygons,
+	    with smooth transitions between them. 'log_scale' switches the class boundaries
+	    from linearly to logarithmically spaced fractions of the value range, which keeps
+	    ordinary changes visible when a few extreme objects dominate the range.
+
+	    Each class has its polygon colour at its centre and blends into the neighbouring
+	    classes towards its boundaries. The weakest class starts with its own colour at
+	    the edge of the transparent 'no change' band, so it stays visible, and the
+	    strongest class keeps its colour out to the end of the range. The centre of a
+	    logarithmic class is the geometric mean of its boundaries. """
 	fractions = RangeFractions(log_scale)
 	n = len(fractions) - 1
 	posRange = max(0, valueRange[1])
 	negRange = min(0, valueRange[0])
 
-	# (lower, upper, colour) in ascending order; None is the transparent 'no change' class
-	classes = []
-	if negRange < 0:
-		for i in range(n):
-			classes.append((fractions[n-i] * negRange, fractions[n-1-i] * negRange, COLORS[i]))
-	classes.append((fractions[0] * negRange, fractions[0] * posRange, None))
-	if posRange > 0:
-		for i in range(n):
-			classes.append((fractions[i] * posRange, fractions[i+1] * posRange, COLORS[i + n]))
+	def centre(i):
+		lo, hi = fractions[i], fractions[i+1]
+		return math.sqrt(lo * hi) if log_scale else (lo + hi) / 2.0
 
-	# A value on a boundary belongs to the class below it. The next class starts a step
-	# above the boundary that is relative to it, so it stays negligible even for the
-	# smallest logarithmic fractions.
-	ramp_items = []
-	for k, (lower, upper, colour) in enumerate(classes):
-		c = QColor(255, 255, 255, 0) if colour is None else QColor(*tupleFromHtmlColor(colour))
-		start = lower if k == 0 else lower + max(abs(lower) * 1e-9, 1e-15)
-		ramp_items.append(QgsColorRampShader.ColorRampItem(start, c))
-		ramp_items.append(QgsColorRampShader.ColorRampItem(upper, c))
+	def colour(index):
+		return QColor(*tupleFromHtmlColor(COLORS[index]))
+
+	transparent = QColor(255, 255, 255, 0)
+	# (value, colour) in ascending order. The step from transparent to the weakest class
+	# is a hard edge, placed a negligible distance (relative to the boundary) apart.
+	items = []
+	if negRange < 0:
+		items.append((negRange, colour(0)))
+		for i in reversed(range(n)):
+			items.append((centre(i) * negRange, colour(n - 1 - i)))
+		edge = fractions[0] * negRange
+		items.append((edge, colour(n - 1)))
+		items.append((edge + abs(edge) * 1e-9, transparent))
+	else:
+		items.append((0, transparent))
+	if posRange > 0:
+		edge = fractions[0] * posRange
+		items.append((edge - edge * 1e-9, transparent))
+		items.append((edge, colour(n)))
+		for i in range(n):
+			items.append((centre(i) * posRange, colour(n + i)))
+		items.append((posRange, colour(2 * n - 1)))
+	else:
+		items.append((0, transparent))
 
 	shader = QgsRasterShader()
 	fnc = QgsColorRampShader()
 	fnc.setColorRampType(QgsColorRampShader.Interpolated)
-	fnc.setColorRampItemList(ramp_items)
+	fnc.setColorRampItemList([QgsColorRampShader.ColorRampItem(v, c) for v, c in items])
 	shader.setRasterShaderFunction(fnc)
 	renderer = QgsSingleBandPseudoColorRenderer(layer.dataProvider(), 1, shader)
 	renderer.setClassificationMin(-1)
@@ -486,15 +521,21 @@ class CompareResultsAnalysis(BaseAnalysis):
 		def read_map(table, value_col, id_col, first_table):
 			# key -> (geometry, value, feature id, ID column value); the first object per
 			# key wins, so the user is told when an ID value is shared by several objects.
+			# Objects without an ID value are left out rather than all sharing one key.
 			m = {}
 			duplicates = 0
+			empty = 0
 			for geom, val, idval, fid in self._model.readObjects(table, value_col, id_col, with_fid=True):
+				if filter_mode == 'id' and IsEmptyId(idval):
+					empty += 1
+					continue
 				k = idval if filter_mode == 'id' else geom_key(geom, first_table)
 				if k in m:
 					duplicates += 1
 				else:
 					m[k] = (geom, val, fid, idval)
 			if filter_mode == 'id':
+				WarnIfEmptyIds(table, id_col, empty)
 				WarnIfDuplicateIds(table, id_col, duplicates)
 			return m
 
@@ -572,7 +613,8 @@ class CompareResultsAnalysis(BaseAnalysis):
 				upper = 1e30 if i == last else hi * maxAbs
 				obj_ranges.append((lower, upper, tupleFromHtmlColor(COLORS[i]), labels[i]))
 			# Strongest positive first, so the legend reads red at the top like the raster's
-			self._model.makeGraduated(tableId, 'diff', list(reversed(obj_ranges)))
+			self._model.makeGraduated(tableId, 'diff', list(reversed(obj_ranges)),
+			                          list(reversed(OBJECT_DRAW_ORDER)))
 
 	def _readObjectArrays(self, geomType, props, filter_mode, separateTables):
 		""" Reads point or polygon objects and packs them into the flat arrays pstalgo
@@ -626,18 +668,24 @@ class CompareResultsAnalysis(BaseAnalysis):
 			# second table needs no key of its own.
 			return registry.add(c.x(), c.y()) if first_table else registry.find(c.x(), c.y())
 
-		map1 = {}
-		for g, v, i in objs1:
-			k = key(g, i, True)
-			if k not in map1:
-				map1[k] = (g, v, i)
-		map2 = {}
-		for g, v, i in objs2:
-			k = key(g, i, False)
-			if k is None:
-				continue
-			if k not in map2:
-				map2[k] = (g, v, i)
+		def build_map(objs, first_table, table, id_column):
+			m = {}
+			empty = 0
+			for g, v, i in objs:
+				if filter_mode == 'id' and IsEmptyId(i):
+					empty += 1
+					continue
+				k = key(g, i, first_table)
+				if k is None:
+					continue
+				if k not in m:
+					m[k] = (g, v, i)
+			if filter_mode == 'id':
+				WarnIfEmptyIds(table, id_column, empty)
+			return m
+
+		map1 = build_map(objs1, True, props['in_table1'], props.get('id_column1', ''))
+		map2 = build_map(objs2, False, props['in_table2'], props.get('id_column2', ''))
 		common = map1.keys() & map2.keys()
 		if not common:
 			raise AnalysisException(
@@ -744,11 +792,14 @@ class CompareResultsAnalysis(BaseAnalysis):
 
 	@staticmethod
 	def _tolerance(props):
-		""" Matching tolerance in meters from the wizard, with a safe positive fallback. """
+		""" Matching tolerance in meters from the wizard. 0 asks for identical coordinates;
+		    a missing or invalid value falls back to the default. """
 		try:
 			t = float(props.get('match_tolerance', IDENTICAL_LINE_TOLERANCE_M))
 		except (TypeError, ValueError):
 			return IDENTICAL_LINE_TOLERANCE_M
+		if t == 0:
+			return EXACT_TOLERANCE_M
 		return t if t > 0 else IDENTICAL_LINE_TOLERANCE_M
 
 	def _matchByGeometry(self, lines0, lines1, tol):
@@ -794,14 +845,20 @@ class CompareResultsAnalysis(BaseAnalysis):
 		ids1 = list(self._model.values(table1, id_col1, rowids_per_table[1]))
 		# One line per ID value and table: keeping every line that merely shares its ID
 		# with a matched one would let lines that exist in only one table through.
-		first0 = {}
-		for i, v in enumerate(ids0):
-			first0.setdefault(v, i)
-		first1 = {}
-		for i, v in enumerate(ids1):
-			first1.setdefault(v, i)
-		WarnIfDuplicateIds(table0, id_col0, len(ids0) - len(first0))
-		WarnIfDuplicateIds(table1, id_col1, len(ids1) - len(first1))
+		# Lines without an ID value are left out rather than all sharing one ID.
+		def first_per_id(ids, table, id_col):
+			first = {}
+			empty = 0
+			for i, v in enumerate(ids):
+				if IsEmptyId(v):
+					empty += 1
+				else:
+					first.setdefault(v, i)
+			WarnIfEmptyIds(table, id_col, empty)
+			WarnIfDuplicateIds(table, id_col, len(ids) - empty - len(first))
+			return first
+		first0 = first_per_id(ids0, table0, id_col0)
+		first1 = first_per_id(ids1, table1, id_col1)
 		common = first0.keys() & first1.keys()
 		keep0 = sorted(first0[v] for v in common)
 		keep1 = sorted(first1[v] for v in common)

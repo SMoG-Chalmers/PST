@@ -153,21 +153,28 @@ class QGISModel(object):
 		layer.setRenderer(self._createCategoryRenderer(symbol_props, column, ranges, layer.geometryType()))
 		self._refreshLayer(layer)
 
-	def makeGraduated(self, table, column, ranges):
+	def makeGraduated(self, table, column, ranges, draw_order=None):
 		""" Apply a graduated renderer on 'column'. 'ranges' is a list of
-		    (lower_value, upper_value, rgba_tuple, label). """
+		    (lower_value, upper_value, rgba_tuple, label). 'draw_order' optionally gives
+		    a rendering pass per range (higher is drawn on top), using symbol levels. """
 		layer = self._layerFromName(table)
 		geometryType = layer.geometryType()
 		range_objs = []
-		for lower, upper, rgba, label in ranges:
+		for index, (lower, upper, rgba, label) in enumerate(ranges):
 			symbol = QgsSymbol.defaultSymbol(geometryType)
 			symbol.setColor(QColor(*rgba))
 			# Make the outline match the fill (no black border on polygons/points)
 			symbol_layer = symbol.symbolLayer(0)
 			if hasattr(symbol_layer, 'setStrokeColor'):
 				symbol_layer.setStrokeColor(QColor(*rgba))
+			if draw_order is not None:
+				for i in range(symbol.symbolLayerCount()):
+					symbol.symbolLayer(i).setRenderingPass(draw_order[index])
 			range_objs.append(QgsRendererRange(lower, upper, symbol, label))
-		layer.setRenderer(QgsGraduatedSymbolRenderer(column, range_objs))
+		renderer = QgsGraduatedSymbolRenderer(column, range_objs)
+		if draw_order is not None:
+			renderer.setUsingSymbolLevels(True)
+		layer.setRenderer(renderer)
 		self._refreshLayer(layer)
 
 	def _createCategoryRenderer(self, symbol_props, column, ranges, geometryType):
