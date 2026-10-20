@@ -31,7 +31,14 @@ jobs:
           ls -lh pstalgo/bin/
           file pstalgo/bin/libpstalgo.dylib
 
-      # Step 4: Save the .dylib for download
+      # Step 4: Run the pstalgo test suite against the built library
+      - name: Run pstalgo tests
+        run: |
+          cd pstalgo/test
+          python3 main.py 2>&1 | tee test-output.txt
+          grep -q "^OK" test-output.txt
+
+      # Step 5: Save the .dylib for download
       - name: Upload dylib artifact
         uses: actions/upload-artifact@v4
         with:
