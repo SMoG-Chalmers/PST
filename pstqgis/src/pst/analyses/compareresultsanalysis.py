@@ -19,7 +19,7 @@ You should have received a copy of the GNU Lesser General Public License
 along with PST. If not, see <http://www.gnu.org/licenses/>.
 """
 
-from qgis.core import QgsProject, QgsRasterShader, QgsColorRampShader, QgsSingleBandPseudoColorRenderer, QgsGeometry, QgsPointXY, QgsCoordinateReferenceSystem, QgsMessageLog, Qgis
+from qgis.core import QgsProject, QgsRasterShader, QgsColorRampShader, QgsSingleBandPseudoColorRenderer, QgsGeometry, QgsPointXY, QgsCoordinateReferenceSystem, QgsMessageLog, Qgis, QgsSpatialIndex, QgsFeature, QgsRectangle
 from qgis.PyQt.QtGui import QColor
 
 from builtins import object, range
@@ -133,6 +133,72 @@ class PointRegistry(object):
 		    object without a counterpart must still get a key of its own. """
 		pid = self.find(x, y)
 		return self.add(x, y) if pid is None else pid
+
+
+class LineCorridorIndex(object):
+	""" Finds, for a line, the registered line it lies along: every point of it within
+	    the tolerance of that one line. This is how a piece of a street that has been
+	    split by a new street finds the original segment, which end-point matching
+	    cannot do since the pieces share only one end point with it.
+
+	    The line is sampled at points at most 10 m apart (at least its end points and
+	    middle); each sample must be within the tolerance of the same registered line,
+	    and the line must run along it: its end points, projected onto the registered
+	    line, must be nearly as far apart as the line is long (within about 10 degrees).
+	    Without that, a short piece of a new street crossing an existing one at a small
+	    angle would be taken for a piece of it. When several lines qualify, the one
+	    nearest to the middle of the piece wins. A line that spans several registered
+	    lines, for example where two segments have been merged, has no single
+	    counterpart and is left unmatched. """
+
+	ALONG_RATIO = 0.985   # cos(10 degrees)
+
+	def __init__(self, tol):
+		self._tol = tol
+		self._index = QgsSpatialIndex()
+		self._geoms = []
+
+	def add(self, geom):
+		""" Register a line and return its index. """
+		i = len(self._geoms)
+		self._geoms.append(geom)
+		f = QgsFeature(i)
+		f.setGeometry(geom)
+		self._index.addFeature(f)
+		return i
+
+	def parent(self, geom):
+		""" Index of the registered line that 'geom' lies along, or None. """
+		tol = self._tol
+		length = geom.length()
+		n = min(20, max(3, int(length / 10.0) + 1))
+		candidates = None
+		for k in range(n):
+			p = geom.interpolate(length * k / (n - 1)).asPoint() if length > 0 else geom.vertexAt(0)
+			pt = QgsGeometry.fromPointXY(QgsPointXY(p.x(), p.y()))
+			near = set()
+			for i in self._index.intersects(QgsRectangle(p.x() - tol, p.y() - tol, p.x() + tol, p.y() + tol)):
+				if self._geoms[i].distance(pt) <= tol:
+					near.add(i)
+			candidates = near if candidates is None else (candidates & near)
+			if not candidates:
+				return None
+		if length > 0:
+			p0 = geom.interpolate(0).asPoint()
+			p1 = geom.interpolate(length).asPoint()
+			along = []
+			for i in candidates:
+				g = self._geoms[i]
+				span = abs(g.lineLocatePoint(QgsGeometry.fromPointXY(QgsPointXY(p1.x(), p1.y())))
+				           - g.lineLocatePoint(QgsGeometry.fromPointXY(QgsPointXY(p0.x(), p0.y()))))
+				if span >= self.ALONG_RATIO * length:
+					along.append(i)
+			candidates = along
+			if not candidates:
+				return None
+		m = geom.interpolate(length / 2.0).asPoint() if length > 0 else geom.vertexAt(0)
+		mid = QgsGeometry.fromPointXY(QgsPointXY(m.x(), m.y()))
+		return min(candidates, key=lambda i: self._geoms[i].distance(mid))
 
 
 def RangeFractions(log_scale):
@@ -514,6 +580,9 @@ class CompareResultsAnalysis(BaseAnalysis):
 			raise AnalysisException("Could not determine the geometry type of '%s'." % table1)
 
 		registry = PointRegistry(self._tolerance(props))
+		# Lines that do not match on their end points may still lie along a before line
+		corridor = LineCorridorIndex(self._tolerance(props)) if geomType == GeometryType.LINE else None
+		corridor_keys = []   # corridor index -> before key
 
 		def key_points(geom):
 			if geomType == GeometryType.LINE:
@@ -524,14 +593,26 @@ class CompareResultsAnalysis(BaseAnalysis):
 		def before_key(geom, idval):
 			if match_mode == 'id':
 				return idval
-			return tuple(sorted(registry.add(p.x(), p.y()) for p in key_points(geom)))
+			k = tuple(sorted(registry.add(p.x(), p.y()) for p in key_points(geom)))
+			if corridor is not None:
+				corridor.add(geom)
+				corridor_keys.append(k)
+			return k
 
 		def after_key(geom, idval):
 			# None when the object has no counterpart within the tolerance
 			if match_mode == 'id':
 				return idval
 			ids = [registry.find(p.x(), p.y()) for p in key_points(geom)]
-			return None if None in ids else tuple(sorted(ids))
+			if None not in ids:
+				k = tuple(sorted(ids))
+				if k in mapA:
+					return k
+			if corridor is not None:
+				i = corridor.parent(geom)
+				if i is not None:
+					return corridor_keys[i]
+			return None
 
 		# Before: key -> (geometry, value, feature id, ID value); the first object per key
 		# is used. Objects without an ID value are left out rather than all sharing one key.
@@ -848,8 +929,11 @@ class CompareResultsAnalysis(BaseAnalysis):
 		return t if t > 0 else IDENTICAL_LINE_TOLERANCE_M
 
 	def _matchByGeometry(self, lines0, lines1, tol):
-		""" Return (keep_indices0, keep_indices1) — indices of lines whose endpoint
-		    geometry matches in the other table (within tolerance, direction-independent). """
+		""" Return (keep_indices0, keep_indices1) - indices of lines of the first table
+		    that have a counterpart in the second, and of lines of the second table that
+		    have one in the first: the same end points (within tolerance, direction-
+		    independent), or, failing that, a line of the first table it lies along
+		    (see LineCorridorIndex). Every such line of the second table is kept. """
 		n0 = len(lines0) // 4
 		n1 = len(lines1) // 4
 		registry = PointRegistry(tol)
@@ -863,18 +947,28 @@ class CompareResultsAnalysis(BaseAnalysis):
 				keys0[k] = i
 		keep1 = []
 		matched = set()
+		leftover = []
 		for i in range(n1):
 			a = registry.find(lines1[i*4], lines1[i*4+1])
 			b = registry.find(lines1[i*4+2], lines1[i*4+3])
-			# An endpoint with no counterpart means the line cannot be an identical one
-			if a is None or b is None:
-				continue
-			k = (a, b) if a <= b else (b, a)
-			if k in keys0:
+			k = None if (a is None or b is None) else ((a, b) if a <= b else (b, a))
+			if k is not None and k in keys0:
 				keep1.append(i)
-				matched.add(k)
-		keep0 = sorted(keys0[k] for k in matched)
-		return keep0, keep1
+				matched.add(keys0[k])
+			else:
+				leftover.append(i)
+		if leftover:
+			corridor = LineCorridorIndex(tol)
+			for i in range(n0):
+				corridor.add(QgsGeometry.fromPolylineXY([QgsPointXY(lines0[i*4], lines0[i*4+1]),
+				                                         QgsPointXY(lines0[i*4+2], lines0[i*4+3])]))
+			for i in leftover:
+				parent = corridor.parent(QgsGeometry.fromPolylineXY([QgsPointXY(lines1[i*4], lines1[i*4+1]),
+				                                                     QgsPointXY(lines1[i*4+2], lines1[i*4+3])]))
+				if parent is not None:
+					keep1.append(i)
+					matched.add(parent)
+		return sorted(matched), sorted(keep1)
 
 	def _matchById(self, props, rowids_per_table):
 		""" Return (keep_indices0, keep_indices1) — indices of lines whose ID field
