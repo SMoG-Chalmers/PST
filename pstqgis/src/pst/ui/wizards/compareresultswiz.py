@@ -144,50 +144,48 @@ class InputPage(BasePage):
 
 		# vlayout.addSpacing(SEPARATOR_HEIGHT)
 
-		# --- Frame 3: Include in comparison ---
-		vlayout.addWidget(QLabel("Include in comparison:"))
+		# --- Frame 3: Matching and inclusion ---
+		# How objects of the two tables are paired, and which objects go into the result.
+		# The two choices are independent: ID matching with 'All objects' is how a street
+		# split by a new street is compared piece by piece with its original segment.
+		vlayout.addWidget(QLabel("Match objects between the tables:"))
 
-		hlayout = QHBoxLayout()
-		hlayout.addSpacing(INDENT_WIDTH)
-		self._allLinesRadio = QRadioButton("All objects")
-		hlayout.addWidget(self._allLinesRadio)
-		hlayout.addStretch()
-		vlayout.addLayout(hlayout)
-
-		hlayout = QHBoxLayout()
-		hlayout.addSpacing(INDENT_WIDTH)
-		self._identicalGeomRadio = QRadioButton("Only identical objects (matching geometry)")
-		hlayout.addWidget(self._identicalGeomRadio)
-		hlayout.addStretch()
-		vlayout.addLayout(hlayout)
-
-		hlayout = QHBoxLayout()
-		hlayout.addSpacing(INDENT_WIDTH * 2)
 		toleranceLabel = QLabel("Matching tolerance:")
-		hlayout.addWidget(toleranceLabel)
 		edit = QLineEdit()
 		edit.setAlignment(Qt.AlignmentFlag.AlignRight)
 		edit.setValidator(QDoubleValidator(0.0, 999999.0, 2, self))
 		edit.setFixedWidth(QFontMetrics(edit.font()).horizontalAdvance('0' * 7))
 		self.regProp("match_tolerance", WizPropFloat(edit, 2.0, 2))
-		hlayout.addWidget(edit)
 		toleranceUnitLabel = QLabel("meters")
+		self._toleranceWidgets = [toleranceLabel, edit, toleranceUnitLabel]
+		self._matchGeomRadio = WidgetEnableRadioButton("By geometry", self._toleranceWidgets)
+
+		hlayout = QHBoxLayout()
+		hlayout.addSpacing(INDENT_WIDTH)
+		hlayout.addWidget(self._matchGeomRadio)
+		hlayout.addStretch()
+		vlayout.addLayout(hlayout)
+
+		hlayout = QHBoxLayout()
+		hlayout.addSpacing(INDENT_WIDTH * 2)
+		hlayout.addWidget(toleranceLabel)
+		hlayout.addWidget(edit)
 		hlayout.addWidget(toleranceUnitLabel)
 		hlayout.addStretch()
 		vlayout.addLayout(hlayout)
-		self._toleranceWidgets = [toleranceLabel, edit, toleranceUnitLabel]
 
 		idComboA = QComboBox()
 		idComboA.setMinimumWidth(100)
 		idComboB = QComboBox()
 		idComboB.setMinimumWidth(100)
 		idLabel = QLabel("ID column:")
-		self._identicalIdRadio = WidgetEnableRadioButton(
-			"Only identical objects (matching ID)", [idLabel, idComboA, idComboB])
+		self._idColumnCombos = [idComboA, idComboB]
+		self._idWidgets = [idLabel, idComboA, idComboB]
+		self._matchIdRadio = WidgetEnableRadioButton("By ID column", self._idWidgets)
 
 		hlayout = QHBoxLayout()
 		hlayout.addSpacing(INDENT_WIDTH)
-		hlayout.addWidget(self._identicalIdRadio)
+		hlayout.addWidget(self._matchIdRadio)
 		hlayout.addStretch()
 		vlayout.addLayout(hlayout)
 
@@ -199,21 +197,42 @@ class InputPage(BasePage):
 		hlayout.addStretch()
 		vlayout.addLayout(hlayout)
 
-		self._idColumnCombos = [idComboA, idComboB]
-		self._idWidgets = [idLabel, idComboA, idComboB]
-		self._filterRadios = [self._allLinesRadio, self._identicalGeomRadio, self._identicalIdRadio]
+		match_group = QButtonGroup(self)
+		match_group.addButton(self._matchGeomRadio)
+		match_group.addButton(self._matchIdRadio)
+		self.regProp("id_column1", WizProp(idComboA, ""))
+		self.regProp("id_column2", WizProp(idComboB, ""))
+		self.regProp("match_mode", WizPropRadio([
+			(self._matchGeomRadio, "geom"),
+			(self._matchIdRadio, "id"),
+		], "geom"))
+
+		vlayout.addSpacing(SEPARATOR_HEIGHT)
+
+		vlayout.addWidget(QLabel("Include in comparison:"))
+
+		hlayout = QHBoxLayout()
+		hlayout.addSpacing(INDENT_WIDTH)
+		self._allLinesRadio = QRadioButton("All objects")
+		hlayout.addWidget(self._allLinesRadio)
+		hlayout.addStretch()
+		vlayout.addLayout(hlayout)
+
+		hlayout = QHBoxLayout()
+		hlayout.addSpacing(INDENT_WIDTH)
+		self._identicalRadio = QRadioButton("Only objects found in both tables")
+		hlayout.addWidget(self._identicalRadio)
+		hlayout.addStretch()
+		vlayout.addLayout(hlayout)
+
+		self._filterRadios = [self._matchGeomRadio, self._matchIdRadio, self._allLinesRadio, self._identicalRadio]
 
 		filter_group = QButtonGroup(self)
 		filter_group.addButton(self._allLinesRadio)
-		filter_group.addButton(self._identicalGeomRadio)
-		filter_group.addButton(self._identicalIdRadio)
-
-		self.regProp("id_column1", WizProp(idComboA, ""))
-		self.regProp("id_column2", WizProp(idComboB, ""))
+		filter_group.addButton(self._identicalRadio)
 		self.regProp("filter_mode", WizPropRadio([
 			(self._allLinesRadio, "all"),
-			(self._identicalGeomRadio, "geom"),
-			(self._identicalIdRadio, "id"),
+			(self._identicalRadio, "identical"),
 		], "all"))
 
 		vlayout.addSpacing(SEPARATOR_HEIGHT)
@@ -298,17 +317,17 @@ class InputPage(BasePage):
 		self._updateFilterEnabled()
 
 	def _updateFilterEnabled(self):
-		""" The 'identical objects' filter only has meaning when two different tables are
-		    compared; with a single table it is a no-op (the analysis skips it), so grey
-		    the whole section out to make that clear. """
+		""" Matching only has meaning when two different tables are compared; with a
+		    single table the objects are the same (the analysis skips it), so grey the
+		    whole section out to make that clear. """
 		enable = (self._tableCombos[0].currentText() != self._tableCombos[1].currentText())
 		for w in self._filterRadios:
 			w.setEnabled(enable)
+		# The tolerance and ID widgets are additionally managed by their radio buttons
 		for w in self._toleranceWidgets:
-			w.setEnabled(enable)
-		# The ID widgets are additionally managed by the 'matching ID' radio itself
+			w.setEnabled(enable and self._matchGeomRadio.isChecked())
 		for w in self._idWidgets:
-			w.setEnabled(enable and self._identicalIdRadio.isChecked())
+			w.setEnabled(enable and self._matchIdRadio.isChecked())
 
 
 class OutputPage(BasePage):

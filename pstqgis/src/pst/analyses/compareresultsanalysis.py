@@ -167,12 +167,12 @@ def FormatIdValue(value):
 	return str(value)
 
 def WarnIfDuplicateIds(table, id_column, duplicate_count):
-	""" ID matching pairs one object per ID value; repeated IDs are matched by their
-	    first occurrence only, which the user should know about. """
+	""" The 'before' table should have one object per ID value; when it has more, only
+	    the first is used as the before object, which the user should know about. """
 	if duplicate_count > 0:
 		QgsMessageLog.logMessage(
 			"Compare Results: %d objects in '%s' share an ID value in column '%s' with another object; "
-			"only the first object per ID value is matched." % (duplicate_count, table, id_column),
+			"only the first object per ID value is used." % (duplicate_count, table, id_column),
 			'PST', Qgis.Warning)
 
 def IsEmptyId(value):
@@ -316,7 +316,8 @@ class CompareResultsAnalysis(BaseAnalysis):
 						"Both tables must have the same geometry type "
 						"('%s' is %s, '%s' is %s)." % (props['in_table1'], geomType, props['in_table2'], geomType2))
 
-			filter_mode = props.get('filter_mode', 'all')
+			match_mode = self._matchMode(props)
+			include_all = self._includeAll(props)
 
 			if geomType == GeometryType.LINE:
 				pstalgoGeometryType = pstalgo.CompareResultsGeometryType.LINES
@@ -352,10 +353,10 @@ class CompareResultsAnalysis(BaseAnalysis):
 					self._model.readValues(table_name, column_name, rowids, values)
 					value_arrays.append(values)
 
-				# --- Apply 'identical lines' filter (Frame 3) ---
-				if filter_mode != 'all' and separateTables:
+				# --- Keep only lines found in both tables (Frame 3) ---
+				if not include_all and separateTables:
 					line_arrays, value_arrays = self._applyIdenticalFilter(
-						filter_mode, props, line_arrays, value_arrays, rowids_per_table)
+						match_mode, props, line_arrays, value_arrays, rowids_per_table)
 			else:
 				# Point/polygon raster: read geometry generically and pack into the flat
 				# arrays pstalgo expects (points: bilinear splat; polygons: area-weighted fill)
@@ -364,7 +365,7 @@ class CompareResultsAnalysis(BaseAnalysis):
 					else pstalgo.CompareResultsGeometryType.POLYGONS)
 				progress.setCurrentTask(Tasks.READ1)
 				line_arrays, value_arrays, polygon_data_arrays = self._readObjectArrays(
-					geomType, props, filter_mode, separateTables)
+					geomType, props, match_mode, include_all, separateTables)
 
 			pixelSize = max(1, int(props['pixel_size']))
 			blurRadius = max(1, int(props['blur_extent'])) if props['custom_blur_extent'] else pixelSize * 7
@@ -474,23 +475,32 @@ class CompareResultsAnalysis(BaseAnalysis):
 				pstalgo.Free(result2)
 
 	def _runObjectComparison(self, props, progress):
-		""" Object (vector) comparison for point, line or polygon geometry. Matches objects
-		    between the two tables, computes per-object diff (B - A), and writes a vector
-		    layer of the original geometry with a 'diff' attribute.
+		""" Object (vector) comparison for point, line or polygon geometry. Every object
+		    of the second table ('after') is matched to its counterpart in the first
+		    ('before'), the diff (after - before) is computed per after object, and a
+		    vector layer with the after geometry is written.
 
-		    Matching key:
+		    Matching is many-to-one: several after objects may share one before object.
+		    This is how a street that is split by a new street is handled: both pieces
+		    carry the ID of the original segment (Create segment map copies the ID column
+		    to every segment of a line) and each piece is compared with the original value.
+		    The before object itself is not written when it has a counterpart.
+
+		    match_mode:
 		      'id'   : value of the chosen ID column
-		      else   : geometry — line endpoints (direction-independent), or the
-		               representative point for points and polygons, paired between the
-		               tables by distance (see PointRegistry)
+		      'geom' : line endpoints (direction-independent), or the representative
+		               point for points and polygons, paired between the tables by
+		               distance (see PointRegistry)
 		    filter_mode:
-		      'geom' / 'id' : only objects present in both tables (intersection)
-		      'all'         : union of all objects, missing side treated as 0 """
-		filter_mode = props.get('filter_mode', 'all')
+		      'identical' : only after objects with a before counterpart
+		      'all'       : all after objects (unmatched ones compared against 0), plus
+		                    before objects without any counterpart, as removed """
+		match_mode = self._matchMode(props)
+		include_all = self._includeAll(props)
 		table1, table2 = props['in_table1'], props['in_table2']
 		col1, col2 = props['in_column1'], props['in_column2']
 
-		if filter_mode == 'id':
+		if match_mode == 'id':
 			id1 = props.get('id_column1', '')
 			id2 = props.get('id_column2', '')
 			if not id1 or not id2:
@@ -505,57 +515,73 @@ class CompareResultsAnalysis(BaseAnalysis):
 
 		registry = PointRegistry(self._tolerance(props))
 
-		def geom_key(geom, first_table):
-			# A line is identified by its two endpoints, a point or polygon by its
-			# representative point. The first table registers its points, the second one
-			# looks up the nearest within the tolerance.
+		def key_points(geom):
 			if geomType == GeometryType.LINE:
 				pts = geom.asMultiPolyline()[0] if geom.isMultipart() else geom.asPolyline()
-				points = (pts[0], pts[-1])
+				return (pts[0], pts[-1])
+			return (geom.centroid().asPoint(),)
+
+		def before_key(geom, idval):
+			if match_mode == 'id':
+				return idval
+			return tuple(sorted(registry.add(p.x(), p.y()) for p in key_points(geom)))
+
+		def after_key(geom, idval):
+			# None when the object has no counterpart within the tolerance
+			if match_mode == 'id':
+				return idval
+			ids = [registry.find(p.x(), p.y()) for p in key_points(geom)]
+			return None if None in ids else tuple(sorted(ids))
+
+		# Before: key -> (geometry, value, feature id, ID value); the first object per key
+		# is used. Objects without an ID value are left out rather than all sharing one key.
+		mapA = {}
+		duplicates = 0
+		empty = 0
+		for geom, val, idval, fid in self._model.readObjects(table1, col1, id1, with_fid=True):
+			if match_mode == 'id' and IsEmptyId(idval):
+				empty += 1
+				continue
+			k = before_key(geom, idval)
+			if k in mapA:
+				duplicates += 1
 			else:
-				points = (geom.centroid().asPoint(),)
-			ids = [registry.add(p.x(), p.y()) if first_table else registry.findOrAdd(p.x(), p.y())
-			       for p in points]
-			return tuple(sorted(ids))
+				mapA[k] = (geom, val, fid, idval)
+		if match_mode == 'id':
+			WarnIfEmptyIds(table1, id1, empty)
+			WarnIfDuplicateIds(table1, id1, duplicates)
 
-		def read_map(table, value_col, id_col, first_table):
-			# key -> (geometry, value, feature id, ID column value); the first object per
-			# key wins, so the user is told when an ID value is shared by several objects.
-			# Objects without an ID value are left out rather than all sharing one key.
-			m = {}
-			duplicates = 0
-			empty = 0
-			for geom, val, idval, fid in self._model.readObjects(table, value_col, id_col, with_fid=True):
-				if filter_mode == 'id' and IsEmptyId(idval):
-					empty += 1
-					continue
-				k = idval if filter_mode == 'id' else geom_key(geom, first_table)
-				if k in m:
-					duplicates += 1
-				else:
-					m[k] = (geom, val, fid, idval)
-			if filter_mode == 'id':
-				WarnIfEmptyIds(table, id_col, empty)
-				WarnIfDuplicateIds(table, id_col, duplicates)
-			return m
-
-		mapA = read_map(table1, col1, id1, True)
-		mapB = read_map(table2, col2, id2, False)
+		# After: every object is kept and looks up its before object
+		listB = []
+		empty = 0
+		for geom, val, idval, fid in self._model.readObjects(table2, col2, id2, with_fid=True):
+			if match_mode == 'id' and IsEmptyId(idval):
+				empty += 1
+				continue
+			listB.append((after_key(geom, idval), (geom, val, fid, idval)))
+		if match_mode == 'id':
+			WarnIfEmptyIds(table2, id2, empty)
 
 		# Build the features: (geometry, diff, value A, value B, fid A, fid B, ID value)
 		def value(obj):
 			return (obj[1] or 0.0) if obj is not None else None
 
 		features = []
-		keys = set(mapA.keys()) | set(mapB.keys()) if filter_mode == 'all' else set(mapA.keys()) & set(mapB.keys())
-		for k in keys:
-			a = mapA.get(k)
-			b = mapB.get(k)
+		matched = set()
+		for k, b in listB:
+			a = mapA.get(k) if k is not None else None
+			if a is None and not include_all:
+				continue
+			if a is not None:
+				matched.add(k)
 			va, vb = value(a), value(b)
-			present = b if b is not None else a
-			features.append((present[0], (vb or 0.0) - (va or 0.0), va, vb,
-			                 a[2] if a is not None else None, b[2] if b is not None else None,
-			                 present[3]))
+			features.append((b[0], (vb or 0.0) - (va or 0.0), va, vb,
+			                 a[2] if a is not None else None, b[2], b[3]))
+		if include_all:
+			# Before objects that no after object refers to have been removed
+			for k, a in mapA.items():
+				if k not in matched:
+					features.append((a[0], -value(a), value(a), None, a[2], None, a[3]))
 
 		if not features:
 			raise AnalysisException(
@@ -582,7 +608,7 @@ class CompareResultsAnalysis(BaseAnalysis):
 			('fid_a', 'integer', column_gen(4)),
 			('fid_b', 'integer', column_gen(5)),
 		]
-		if filter_mode == 'id':
+		if match_mode == 'id':
 			columns.append(('match_id', 'string', (FormatIdValue(v) for v in column_gen(6))))
 		tableId = self._model.createTable(
 			OutputName('Object comparison', props),
@@ -601,7 +627,7 @@ class CompareResultsAnalysis(BaseAnalysis):
 		if maxAbs > 0:
 			# Logarithmic colour scale is offered only for the 'all' comparison, where a
 			# few outliers (new/removed objects) otherwise flatten the linear scale.
-			use_log = props.get('log_scale', False) and filter_mode == 'all'
+			use_log = props.get('log_scale', False) and include_all
 			frac = LOG_RANGES if use_log else RANGES
 			labels = LOG_RANGE_TEXTS if use_log else RANGE_TEXTS
 			norm_ranges = [(-frac[-i-1], -frac[-i-2]) for i in range(len(frac) - 1)]
@@ -616,7 +642,7 @@ class CompareResultsAnalysis(BaseAnalysis):
 			self._model.makeGraduated(tableId, 'diff', list(reversed(obj_ranges)),
 			                          list(reversed(OBJECT_DRAW_ORDER)))
 
-	def _readObjectArrays(self, geomType, props, filter_mode, separateTables):
+	def _readObjectArrays(self, geomType, props, match_mode, include_all, separateTables):
 		""" Reads point or polygon objects and packs them into the flat arrays pstalgo
 		    expects. Returns (coord_arrays, value_arrays, polygon_data_arrays), each a
 		    2-element list. Index 1 of coord/polygon-data is None when both value
@@ -624,7 +650,7 @@ class CompareResultsAnalysis(BaseAnalysis):
 		table1, table2 = props['in_table1'], props['in_table2']
 		col1, col2 = props['in_column1'], props['in_column2']
 
-		if filter_mode == 'id' and separateTables:
+		if match_mode == 'id' and not include_all and separateTables:
 			id1 = props.get('id_column1', '')
 			id2 = props.get('id_column2', '')
 			if not id1 or not id2:
@@ -636,8 +662,8 @@ class CompareResultsAnalysis(BaseAnalysis):
 		objs1 = list(self._model.readObjects(table1, col1, id1))
 		objs2 = list(self._model.readObjects(table2, col2, id2))
 
-		if filter_mode != 'all' and separateTables:
-			objs1, objs2 = self._intersectObjects(objs1, objs2, filter_mode, props)
+		if not include_all and separateTables:
+			objs1, objs2 = self._intersectObjects(objs1, objs2, match_mode, props)
 
 		if geomType == GeometryType.POINT:
 			(coords1, values1) = self._packPoints(objs1)
@@ -654,45 +680,49 @@ class CompareResultsAnalysis(BaseAnalysis):
 
 		return ([coords1, coords2], [values1, values2], [polydata1, polydata2])
 
-	def _intersectObjects(self, objs1, objs2, filter_mode, props):
+	def _intersectObjects(self, objs1, objs2, match_mode, props):
 		""" Keep only objects present in both tables, matched by ID column value or by
-		    representative point within the matching tolerance. Same semantics as the
-		    object comparison path. """
+		    representative point within the matching tolerance. Many-to-one as in the
+		    object comparison: every object of the second table with a counterpart is
+		    kept, and every object of the first table that some object refers to. """
 		registry = PointRegistry(self._tolerance(props))
 
 		def key(geom, idval, first_table):
-			if filter_mode == 'id':
+			if match_mode == 'id':
 				return idval
 			c = geom.centroid().asPoint()
 			# Only objects present in both tables are kept, so an unmatched object of the
 			# second table needs no key of its own.
 			return registry.add(c.x(), c.y()) if first_table else registry.find(c.x(), c.y())
 
-		def build_map(objs, first_table, table, id_column):
-			m = {}
-			empty = 0
-			for g, v, i in objs:
-				if filter_mode == 'id' and IsEmptyId(i):
-					empty += 1
-					continue
-				k = key(g, i, first_table)
-				if k is None:
-					continue
-				if k not in m:
-					m[k] = (g, v, i)
-			if filter_mode == 'id':
-				WarnIfEmptyIds(table, id_column, empty)
-			return m
-
-		map1 = build_map(objs1, True, props['in_table1'], props.get('id_column1', ''))
-		map2 = build_map(objs2, False, props['in_table2'], props.get('id_column2', ''))
-		common = map1.keys() & map2.keys()
-		if not common:
+		map1 = {}
+		empty = 0
+		for g, v, i in objs1:
+			if match_mode == 'id' and IsEmptyId(i):
+				empty += 1
+				continue
+			map1.setdefault(key(g, i, True), (g, v, i))
+		if match_mode == 'id':
+			WarnIfEmptyIds(props['in_table1'], props.get('id_column1', ''), empty)
+		keep2 = []
+		matched = set()
+		empty = 0
+		for g, v, i in objs2:
+			if match_mode == 'id' and IsEmptyId(i):
+				empty += 1
+				continue
+			k = key(g, i, False)
+			if k is not None and k in map1:
+				keep2.append((g, v, i))
+				matched.add(k)
+		if match_mode == 'id':
+			WarnIfEmptyIds(props['in_table2'], props.get('id_column2', ''), empty)
+		if not matched:
 			raise AnalysisException(
 				"No identical objects found between '%s' and '%s'. "
 				"Try a different matching mode, or include all objects." % (
 					props['in_table1'], props['in_table2']))
-		return ([map1[k] for k in common], [map2[k] for k in common])
+		return ([map1[k] for k in matched], keep2)
 
 	@staticmethod
 	def _toFloat(value):
@@ -791,6 +821,21 @@ class CompareResultsAnalysis(BaseAnalysis):
 		return new_line_arrays, new_value_arrays
 
 	@staticmethod
+	def _matchMode(props):
+		""" 'geom' or 'id'. Settings saved before the matching method became a choice of
+		    its own only had filter_mode, where 'id' meant matching by ID. """
+		mode = props.get('match_mode')
+		if mode in ('geom', 'id'):
+			return mode
+		return 'id' if props.get('filter_mode') == 'id' else 'geom'
+
+	@staticmethod
+	def _includeAll(props):
+		""" True when every object goes into the result, False when only objects found
+		    in both tables do. """
+		return props.get('filter_mode', 'all') == 'all'
+
+	@staticmethod
 	def _tolerance(props):
 		""" Matching tolerance in meters from the wizard. 0 asks for identical coordinates;
 		    a missing or invalid value falls back to the default. """
@@ -816,7 +861,8 @@ class CompareResultsAnalysis(BaseAnalysis):
 			# If duplicate keys exist within the same table, keep the first seen
 			if k not in keys0:
 				keys0[k] = i
-		keys1 = {}
+		keep1 = []
+		matched = set()
 		for i in range(n1):
 			a = registry.find(lines1[i*4], lines1[i*4+1])
 			b = registry.find(lines1[i*4+2], lines1[i*4+3])
@@ -824,11 +870,10 @@ class CompareResultsAnalysis(BaseAnalysis):
 			if a is None or b is None:
 				continue
 			k = (a, b) if a <= b else (b, a)
-			if k not in keys1:
-				keys1[k] = i
-		common = keys0.keys() & keys1.keys()
-		keep0 = sorted(keys0[k] for k in common)
-		keep1 = sorted(keys1[k] for k in common)
+			if k in keys0:
+				keep1.append(i)
+				matched.add(k)
+		keep0 = sorted(keys0[k] for k in matched)
 		return keep0, keep1
 
 	def _matchById(self, props, rowids_per_table):
@@ -843,23 +888,27 @@ class CompareResultsAnalysis(BaseAnalysis):
 				"ID matching requires an ID column to be selected for both tables.")
 		ids0 = list(self._model.values(table0, id_col0, rowids_per_table[0]))
 		ids1 = list(self._model.values(table1, id_col1, rowids_per_table[1]))
-		# One line per ID value and table: keeping every line that merely shares its ID
-		# with a matched one would let lines that exist in only one table through.
+		# One line per ID value in the first table; every line of the second table whose
+		# ID is found there is kept, so the pieces of a split street all stay in.
 		# Lines without an ID value are left out rather than all sharing one ID.
-		def first_per_id(ids, table, id_col):
-			first = {}
-			empty = 0
-			for i, v in enumerate(ids):
-				if IsEmptyId(v):
-					empty += 1
-				else:
-					first.setdefault(v, i)
-			WarnIfEmptyIds(table, id_col, empty)
-			WarnIfDuplicateIds(table, id_col, len(ids) - empty - len(first))
-			return first
-		first0 = first_per_id(ids0, table0, id_col0)
-		first1 = first_per_id(ids1, table1, id_col1)
-		common = first0.keys() & first1.keys()
-		keep0 = sorted(first0[v] for v in common)
-		keep1 = sorted(first1[v] for v in common)
+		first0 = {}
+		empty = 0
+		for i, v in enumerate(ids0):
+			if IsEmptyId(v):
+				empty += 1
+			else:
+				first0.setdefault(v, i)
+		WarnIfEmptyIds(table0, id_col0, empty)
+		WarnIfDuplicateIds(table0, id_col0, len(ids0) - empty - len(first0))
+		keep1 = []
+		matched = set()
+		empty = 0
+		for i, v in enumerate(ids1):
+			if IsEmptyId(v):
+				empty += 1
+			elif v in first0:
+				keep1.append(i)
+				matched.add(v)
+		WarnIfEmptyIds(table1, id_col1, empty)
+		keep0 = sorted(first0[v] for v in matched)
 		return keep0, keep1
