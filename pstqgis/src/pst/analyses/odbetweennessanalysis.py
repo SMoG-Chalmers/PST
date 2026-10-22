@@ -179,7 +179,14 @@ def ReadLineCosts(model, table, rowids, expression, out_costs):
 	""" Evaluates the line cost expression per line. All values must be numbers, zero or greater. """
 	missing = []
 	negative = []
-	for i, value in enumerate(model.expressionValues(table, expression, rowids)):
+	try:
+		values = list(model.expressionValues(table, expression, rowids))
+	except AnalysisException:
+		raise
+	except Exception as e:
+		# Parse, field and evaluation errors: show them as PST errors, not as Python tracebacks
+		raise AnalysisException(str(e))
+	for i, value in enumerate(values):
 		if value is None:
 			missing.append(rowids.at(i))
 			value = 0
