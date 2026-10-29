@@ -261,7 +261,7 @@ class QGISModel(object):
 						row_idx += 1
 						yield tuple(feature[field_index] for field_index in field_indices)
 			if row_idx != rowids.size():
-				raise Exception("QGISModel.readValues: Only %d of %d values could be read!" % (row_idx, num_rows))
+				raise Exception("QGISModel.readValues: Only %d of %d values could be read!" % (row_idx, rowids.size()))
 		else:
 			if len(field_indices) == 1:
 				field_index = field_indices[0]
@@ -350,7 +350,10 @@ class QGISModel(object):
 		if progress is not None:
 			progress.setProgress(1)
 
-	def readPolylines(self, table_name, progress = None):
+	def readPolylines(self, table_name, progress = None, out_rowids = None):
+		""" Returns (coords, polys). Each feature gives one polyline per part; all parts but the last
+		    have negative point counts (-1 - count) so that pstalgo assigns them the same base index.
+		    If out_rowids is given, the id of each feature that gave at least one part is appended. """
 		layer = self._layerFromName(table_name)
 		coords = array.array('d')
 		polys = array.array('i')
@@ -360,19 +363,15 @@ class QGISModel(object):
 			if g is None:
 				continue  # Seems strange that a feature could be without geometry, but this was encountered once
 			if g.type() == QgsWkbTypes.LineGeometry:
-				if g.isMultipart():
-					multiPolyline = g.asMultiPolyline()
-					for poly in multiPolyline:
+				parts = g.asMultiPolyline() if g.isMultipart() else [g.asPolyline()]
+				if parts:
+					for part_index, poly in enumerate(parts):
 						for c in poly:
 							coords.append(c.x())
 							coords.append(c.y())
-						polys.append(len(poly))
-				else:
-					poly = g.asPolyline()
-					for c in poly:
-						coords.append(c.x())
-						coords.append(c.y())
-					polys.append(len(poly))
+						polys.append(len(poly) if part_index == len(parts) - 1 else -1 - len(poly))
+					if out_rowids is not None:
+						out_rowids.append(feature.id())
 			if progress is not None and feature_index % 1000 == 0:
 				progress.setProgress(float(feature_index) / num_features)
 		if progress is not None:

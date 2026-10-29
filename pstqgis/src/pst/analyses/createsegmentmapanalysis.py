@@ -53,14 +53,15 @@ class CreateSegmentMapAnalysis(BaseAnalysis):
 		progress.addTask(Tasks.ANALYSIS, 1,      None)
 		progress.addTask(Tasks.WRITE_RESULTS, 5, "Writing results")
 
-		# --- READ_LINES ---
-		progress.setCurrentTask(Tasks.READ_LINES)
-		(coords, polys) = model.readPolylines(props['in_network'], progress)
-
 		initial_alloc_state = stack_allocator.state()
 		algo = None
 
 		try:
+			# --- READ_LINES ---
+			progress.setCurrentTask(Tasks.READ_LINES)
+			rowids = Vector(ctypes.c_longlong, model.rowCount(props['in_network']), stack_allocator)
+			(coords, polys) = model.readPolylines(props['in_network'], progress, rowids)
+
 			road_network_type = pstalgo.RoadNetworkType.FromString(props['in_network_type'])
 
 			# Unlinks
@@ -99,13 +100,13 @@ class CreateSegmentMapAnalysis(BaseAnalysis):
 				if extra_column_type is None:
 					raise Exception("Unsupported copy column data type")
 
-				# Create copy-column repeat counts
+				# Create copy-column repeat counts. A segment's base index is the index of its
+				# feature in rowids, so features without geometry don't shift the values.
 				segments = res.m_Segments
-				poly_count = len(polys)
-				repeat_count = array.array('I', [0])*poly_count
+				repeat_count = array.array('I', [0])*rowids.size()
 				for i in range(res.m_SegmentCount):
-					poly_index = segments[i*3+2]
-					repeat_count[poly_index] = repeat_count[poly_index] + 1
+					base_index = segments[i*3+2]
+					repeat_count[base_index] = repeat_count[base_index] + 1
 
 				def repeat_iter(value_iter, repeat_counts):
 					for reps in repeat_counts:
@@ -113,7 +114,7 @@ class CreateSegmentMapAnalysis(BaseAnalysis):
 						for i in range(reps):
 							yield value
 
-				columns.append((extra_column_name, extra_column_type, repeat_iter(model.values(props['in_network'], copy_column_name), repeat_count)))
+				columns.append((extra_column_name, extra_column_type, repeat_iter(model.values(props['in_network'], copy_column_name, rowids), repeat_count)))
 
 			def line_gen(coords, segments, count):
 				for i in range(count):
