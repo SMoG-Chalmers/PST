@@ -20,6 +20,7 @@ along with PST. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <vector>
 
@@ -217,9 +218,13 @@ public:
 			GenerateSegments(lines.data(), base_indices.data(), (unsigned int)lines.size(), cuts.data(), (unsigned int)cuts.size(), m_Segments, points);
 		}
 
-		// Snap
+		// Snap. Points closer than the float rounding tolerance are always merged, so that a cut
+		// made by an extruded end-point (see MinExtrude) connects to that end-point even with zero snap.
 		progress.SetCurrentTask(ETask_TrimTails);
-		Snap(m_Segments, points, desc.m_Snap);
+		float max_abs_coord = 0;
+		for (const auto& p : points)
+			max_abs_coord = std::max(max_abs_coord, std::max(std::fabs(p.x), std::fabs(p.y)));
+		Snap(m_Segments, points, std::max(desc.m_Snap, MinExtrude(float2(max_abs_coord, max_abs_coord))));
 
 		// Remove duplicate segments
 		progress.SetCurrentTask(ETask_RemoveDuplicates);
@@ -292,6 +297,9 @@ public:
 		tmp.reserve(line_count * 2);
 		for (unsigned int i = 0; i < line_count; ++i)
 		{
+			// Zero length lines (e.g. a duplicated end vertex) do not connect anything
+			if (lines[i].p1 == lines[i].p2)
+				continue;
 			tmp.push_back(STmp(lines[i].p1, i * 2));
 			tmp.push_back(STmp(lines[i].p2, i * 2 + 1));
 		}
@@ -299,14 +307,15 @@ public:
 		std::sort(tmp.begin(), tmp.end());
 
 		bits.clearAll();
-		for (unsigned int i = 0; i < (line_count * 2) - 1; ++i)
+		const unsigned int tmp_count = (unsigned int)tmp.size();
+		for (unsigned int i = 0; i + 1 < tmp_count; ++i)
 		{
 			if (tmp[i + 1].m_Pos == tmp[i].m_Pos)
 			{
 				bits.set(tmp[i].m_Index);
 				do {
 					bits.set(tmp[++i].m_Index);
-				} while (i < line_count * 2 - 1 && tmp[i + 1].m_Pos == tmp[i].m_Pos);
+				} while (i + 1 < tmp_count && tmp[i + 1].m_Pos == tmp[i].m_Pos);
 			}
 		}
 
@@ -346,6 +355,13 @@ public:
 		}
 	}
 
+	// Unconnected end-points are always extruded at least this much, even with zero snap, so that
+	// an end-point lying exactly on another line still cuts it despite float rounding of coordinates.
+	static float MinExtrude(const float2& p)
+	{
+		return std::max(0.001f, 1e-6f * std::max(std::fabs(p.x), std::fabs(p.y)));
+	}
+
 	void FindCuts(const CLine2f* lines, unsigned int line_count, float extrude_len, std::vector<SCut>& ret_cuts, IProgressCallback& progress)
 	{
 		CLineAABSPTree bsp = CLineAABSPTree::Create(reinterpret_cast<const float2*>(lines), line_count, 16);
@@ -365,7 +381,7 @@ public:
 				continue;
 			const auto l0_v = v * (1.0f / l0_len);
 			cuts.clear();
-			bsp.TestCapsule(l0.p1, l0.p2, extrude_len, sets);
+			bsp.TestCapsule(l0.p1, l0.p2, std::max(extrude_len, std::max(MinExtrude(l0.p1), MinExtrude(l0.p2))), sets);
 			for (const auto& s : sets)
 			{
 				for (unsigned int o = s.m_FirstObject; o < s.m_FirstObject + s.m_Count; ++o)
@@ -391,8 +407,8 @@ public:
 						continue;
 
 					// Extrude L1 at unconnected end-points
-					const float l1_min = connection_bits.get(l1_index * 2) ? 0.f : -extrude_len;
-					const float l1_max = connection_bits.get(l1_index * 2 + 1) ? l1_len : l1_len + extrude_len;
+					const float l1_min = connection_bits.get(l1_index * 2) ? 0.f : -std::max(extrude_len, MinExtrude(l1.p1));
+					const float l1_max = connection_bits.get(l1_index * 2 + 1) ? l1_len : l1_len + std::max(extrude_len, MinExtrude(l1.p2));
 
 					if (t0 <= .0f || t0 >= l0_len || t1 <= l1_min || t1 >= l1_max)
 						continue;
