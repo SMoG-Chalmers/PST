@@ -406,9 +406,11 @@ public:
 					if (!Find2DRayIntersection(l0.p1, l0_v, l1.p1, l1_v, t0, t1))
 						continue;
 
-					// Extrude L1 at unconnected end-points
-					const float l1_min = connection_bits.get(l1_index * 2) ? 0.f : -std::max(extrude_len, MinExtrude(l1.p1));
-					const float l1_max = connection_bits.get(l1_index * 2 + 1) ? l1_len : l1_len + std::max(extrude_len, MinExtrude(l1.p2));
+					// Extrude L1 at unconnected end-points. Connected end-points are extruded only by the
+					// float rounding tolerance, so that a junction lying exactly on L0 (e.g. two lines
+					// ending at the same point on it) still cuts it.
+					const float l1_min = -(connection_bits.get(l1_index * 2) ? MinExtrude(l1.p1) : std::max(extrude_len, MinExtrude(l1.p1)));
+					const float l1_max = l1_len + (connection_bits.get(l1_index * 2 + 1) ? MinExtrude(l1.p2) : std::max(extrude_len, MinExtrude(l1.p2)));
 
 					if (t0 <= .0f || t0 >= l0_len || t1 <= l1_min || t1 >= l1_max)
 						continue;
