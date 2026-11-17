@@ -53,6 +53,19 @@ class TestAttractionReach(unittest.TestCase):
 		self.doTest(g, count, OriginType.POINT_GROUPS, DistanceType.UNDEFINED, Radii(), AttractionWeightFunction.CONSTANT, 0, attraction_points, None, 0, attraction_values, distr_func, collect_func, [4+3]*count)
 		pstalgo.FreeGraph(g)
 
+	def test_arch_region_origin_radius(self):
+		# With a radius the regions reach different attractions, so each region must collect the
+		# scores of its own points, not those of the first region
+		count = 5
+		length = 3
+		g = CreateRegionOriginChainGraph(count, length)
+		attraction_points = array.array('d', [-1, 0, length*count+1, 0])  # One point left of and another right of graph
+		attraction_values = array.array('f', [4, 3])
+		distr_func = pstalgo.AttractionDistributionFunc.DIVIDE  # Redundant here
+		for collect_func in (pstalgo.AttractionCollectionFunc.AVARAGE, pstalgo.AttractionCollectionFunc.MIN, pstalgo.AttractionCollectionFunc.MAX):
+			self.doTest(g, count, OriginType.POINT_GROUPS, DistanceType.UNDEFINED, Radii(steps=2), AttractionWeightFunction.CONSTANT, 0, attraction_points, None, 0, attraction_values, distr_func, collect_func, [4,4,4+3,3,3])
+		pstalgo.FreeGraph(g)
+
 	def test_arch_region_attr(self):
 		count = 5
 		length = 3

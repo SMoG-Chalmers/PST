@@ -134,7 +134,7 @@ namespace
 				// Accumulate score from workers
 				double accumulated_score = 0;
 				for (unsigned int w = 0; w < worker_count; ++w)
-					accumulated_score += worker_point_scores[w][i];
+					accumulated_score += worker_point_scores[w][point_index + i];
 				const float point_score = (float)accumulated_score;
 				if (point_score < 0.0f)
 					continue;
